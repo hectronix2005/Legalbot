@@ -19,13 +19,14 @@ const userSchema = new mongoose.Schema({
   role: {
     type: String,
     required: true,
-    enum: ['admin', 'lawyer', 'requester']
+    enum: ['super_admin', 'admin', 'lawyer', 'requester']
   },
-  company: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'Company',
-    default: null
-  },
+  // Removido: company directa, ahora se maneja a través de UserCompany
+  // company: {
+  //   type: mongoose.Schema.Types.ObjectId,
+  //   ref: 'Company',
+  //   default: null
+  // },
   active: {
     type: Boolean,
     default: true

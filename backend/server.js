@@ -36,6 +36,12 @@ const requestRoutes = require('./routes/requests-mongo');
 const contractRoutes = require('./routes/contracts-mongo');
 const userRoutes = require('./routes/users-mongo');
 const dashboardRoutes = require('./routes/dashboard-mongo');
+const userCompanyRoutes = require('./routes/user-company-mongo');
+const userMultipleCompaniesRoutes = require('./routes/user-multiple-companies');
+const companyUsersRoutes = require('./routes/company-users');
+const wordProcessorRoutes = require('./routes/word-processor');
+const contractGeneratorRoutes = require('./routes/contract-generator');
+const documentManagementRoutes = require('./routes/document-management');
 
 // Usar rutas
 app.use('/api/auth', authRoutes);
@@ -45,6 +51,12 @@ app.use('/api/requests', requestRoutes);
 app.use('/api/contracts', contractRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/dashboard', dashboardRoutes);
+app.use('/api/super-admin', userCompanyRoutes);
+app.use('/api/multi-companies', userMultipleCompaniesRoutes);
+app.use('/api/company-users', companyUsersRoutes);
+app.use('/api/templates', wordProcessorRoutes);
+app.use('/api/contract-generator', contractGeneratorRoutes);
+app.use('/api/documents', documentManagementRoutes);
 
 // Ruta de prueba
 app.get('/api/health', (req, res) => {

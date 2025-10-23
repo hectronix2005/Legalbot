@@ -64,6 +64,15 @@ async function initMongoDB() {
       company: company._id
     });
 
+    // Crear usuario super admin
+    const superAdmin = await User.create({
+      email: 'superadmin@legalbot.com',
+      password: hashedPassword,
+      name: 'Super Administrador',
+      role: 'super_admin',
+      company: null // Super admin no está asociado a una empresa específica
+    });
+
     console.log('✅ Usuarios demo creados');
 
     // Crear plantilla de ejemplo
@@ -143,6 +152,7 @@ CONTRATANTE                    CONTRATISTA
 
     console.log('\n✅ Base de datos MongoDB inicializada exitosamente!\n');
     console.log('📧 Credenciales de acceso:');
+    console.log('   Super Admin: superadmin@legalbot.com / 123456');
     console.log('   Admin:       admin@demo.com / 123456');
     console.log('   Abogado:     abogado@demo.com / 123456');
     console.log('   Solicitante: solicitante@demo.com / 123456\n');

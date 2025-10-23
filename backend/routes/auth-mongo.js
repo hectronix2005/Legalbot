@@ -12,7 +12,7 @@ router.post('/register',
     body('email').isEmail().withMessage('Email inválido'),
     body('password').isLength({ min: 6 }).withMessage('La contraseña debe tener al menos 6 caracteres'),
     body('name').notEmpty().withMessage('El nombre es requerido'),
-    body('role').isIn(['admin', 'lawyer', 'requester']).withMessage('Rol inválido')
+    body('role').isIn(['super_admin', 'admin', 'lawyer', 'requester']).withMessage('Rol inválido')
   ],
   async (req, res) => {
     try {
@@ -68,7 +68,7 @@ router.post('/login',
       const { email, password } = req.body;
 
       // Buscar usuario
-      const user = await User.findOne({ email, active: true }).populate('company', 'name tax_id');
+      const user = await User.findOne({ email, active: true });
       
       if (!user) {
         return res.status(401).json({ error: 'Credenciales inválidas' });
@@ -86,7 +86,7 @@ router.post('/login',
           id: user._id, 
           email: user.email, 
           role: user.role,
-          company_id: user.company?._id 
+          company_id: null 
         },
         process.env.JWT_SECRET,
         { expiresIn: '24h' }
@@ -99,7 +99,7 @@ router.post('/login',
           email: user.email,
           name: user.name,
           role: user.role,
-          company_id: user.company?._id,
+          company_id: null,
           company: user.company
         }
       });

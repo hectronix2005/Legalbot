@@ -23,6 +23,11 @@ const authorize = (...roles) => {
       return res.status(401).json({ error: 'No autenticado' });
     }
 
+    // Super admin tiene acceso a todo
+    if (req.user.role === 'super_admin') {
+      return next();
+    }
+
     if (!roles.includes(req.user.role)) {
       return res.status(403).json({ error: 'No tiene permisos para esta acción' });
     }
@@ -31,5 +36,18 @@ const authorize = (...roles) => {
   };
 };
 
-module.exports = { authenticate, authorize };
+// Middleware especial para super admin
+const requireSuperAdmin = (req, res, next) => {
+  if (!req.user) {
+    return res.status(401).json({ error: 'No autenticado' });
+  }
+
+  if (req.user.role !== 'super_admin') {
+    return res.status(403).json({ error: 'Se requiere rol de Super Admin' });
+  }
+
+  next();
+};
+
+module.exports = { authenticate, authorize, requireSuperAdmin };
 

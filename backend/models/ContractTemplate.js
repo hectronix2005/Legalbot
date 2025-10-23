@@ -22,6 +22,38 @@ const templateFieldSchema = new mongoose.Schema({
   display_order: {
     type: Number,
     default: 0
+  },
+  // Información de la variable original
+  original_marker: {
+    type: String,
+    required: false,
+    default: '',
+    description: 'El marcador original {{variable}} detectado en el documento'
+  },
+  description: {
+    type: String,
+    default: '',
+    description: 'Descripción de la variable para el usuario'
+  },
+  can_repeat: {
+    type: Boolean,
+    default: false,
+    description: 'Indica si esta variable puede ser repetida/reutilizada'
+  },
+  repeat_source: {
+    type: Number,
+    default: null,
+    description: 'Número de la variable de origen si esta es una repetición'
+  },
+  repeat_count: {
+    type: Number,
+    default: 1,
+    description: 'Número de veces que aparece esta variable en el documento original'
+  },
+  is_repeated: {
+    type: Boolean,
+    default: false,
+    description: 'Indica si esta variable está marcada como repetida por el usuario'
   }
 });
 

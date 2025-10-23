@@ -1,0 +1,17 @@
+ACUERDO DE CONFIDENCIALIDAD
+
+Entre {{nombre_empresa}}, identificada con NIT {{nit_empresa}}, 
+con domicilio en {{ciudad}}, representada por {{representante_legal}}, 
+identificado con cédula {{cedula_representante}}, y la otra parte, 
+se celebra el presente acuerdo de confidencialidad el {{fecha_contrato}}.
+
+PRIMERA: INFORMACIÓN CONFIDENCIAL
+Se considerará información confidencial todos los datos proporcionados por las partes.
+
+SEGUNDA: OBLIGACIONES
+Las partes se comprometen a mantener la confidencialidad de la información.
+
+Firmado en {{ciudad}} el {{fecha_contrato}}.
+
+{{representante_legal}}
+{{cedula_representante}}

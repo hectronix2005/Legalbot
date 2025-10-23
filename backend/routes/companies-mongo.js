@@ -4,8 +4,8 @@ const { authenticate, authorize } = require('../middleware/auth');
 const { body, validationResult } = require('express-validator');
 const Company = require('../models/Company');
 
-// Obtener todas las empresas (solo admin)
-router.get('/', authenticate, authorize('admin'), async (req, res) => {
+// Obtener todas las empresas (admin y super_admin)
+router.get('/', authenticate, authorize('admin', 'super_admin'), async (req, res) => {
   try {
     const companies = await Company.find({ active: true }).sort({ name: 1 });
     res.json(companies);

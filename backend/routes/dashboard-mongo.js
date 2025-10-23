@@ -13,7 +13,7 @@ router.get('/stats', authenticate, async (req, res) => {
   try {
     const stats = {};
 
-    if (req.user.role === 'admin') {
+    if (req.user.role === 'admin' || req.user.role === 'super_admin') {
       stats.totalCompanies = await Company.countDocuments({ active: true });
       stats.totalUsers = await User.countDocuments({ active: true });
       stats.totalTemplates = await ContractTemplate.countDocuments({ active: true });
