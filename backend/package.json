@@ -11,7 +11,8 @@
     "backup": "node scripts/backup-database.js",
     "restore": "node scripts/restore-database.js",
     "health": "node scripts/health-check.js",
-    "auto-backup": "node scripts/auto-backup.js"
+    "auto-backup": "node scripts/auto-backup.js",
+    "migrate-templates": "node scripts/migrate-templates-to-company.js"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",
