@@ -39,6 +39,24 @@ const upload = multer({
   }
 });
 
+// Obtener todas las plantillas (ruta pública para verificar)
+router.get('/public', async (req, res) => {
+  try {
+    const templates = await ContractTemplate.find({ active: true })
+      .select('name description category createdAt')
+      .sort({ createdAt: -1 });
+
+    res.json({
+      success: true,
+      count: templates.length,
+      templates: templates
+    });
+  } catch (error) {
+    console.error('Error al obtener plantillas públicas:', error);
+    res.status(500).json({ error: 'Error al obtener plantillas' });
+  }
+});
+
 // Obtener todas las plantillas
 router.get('/', authenticate, async (req, res) => {
   try {

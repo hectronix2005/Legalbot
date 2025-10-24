@@ -5,6 +5,8 @@ const jwt = require('jsonwebtoken');
 const { body, validationResult } = require('express-validator');
 const User = require('../models/User');
 const Company = require('../models/Company');
+const UserCompany = require('../models/UserCompany');
+const { authenticate } = require('../middleware/auth');
 
 // Registro de usuario
 router.post('/register',
@@ -69,7 +71,7 @@ router.post('/login',
 
       // Buscar usuario
       const user = await User.findOne({ email, active: true });
-      
+
       if (!user) {
         return res.status(401).json({ error: 'Credenciales inválidas' });
       }
@@ -80,13 +82,30 @@ router.post('/login',
         return res.status(401).json({ error: 'Credenciales inválidas' });
       }
 
+      // Obtener empresas y roles del usuario (multi-tenant)
+      const userCompanies = await UserCompany.find({
+        user: user._id,
+        isActive: true
+      }).populate('company', 'name tax_id');
+
+      // Formatear companyRoles para el frontend
+      const companyRoles = {};
+      for (const uc of userCompanies) {
+        if (uc.company) {
+          companyRoles[uc.company._id.toString()] = {
+            name: uc.company.name,
+            roles: [uc.role] // Cada UserCompany tiene un solo rol, pero lo ponemos en array
+          };
+        }
+      }
+
       // Generar token JWT
       const token = jwt.sign(
-        { 
-          id: user._id, 
-          email: user.email, 
+        {
+          id: user._id,
+          email: user.email,
           role: user.role,
-          company_id: null 
+          company_id: null
         },
         process.env.JWT_SECRET,
         { expiresIn: '24h' }
@@ -100,7 +119,7 @@ router.post('/login',
           name: user.name,
           role: user.role,
           company_id: null,
-          company: user.company
+          companyRoles: Object.keys(companyRoles).length > 0 ? companyRoles : undefined
         }
       });
     } catch (error) {
@@ -109,6 +128,48 @@ router.post('/login',
     }
   }
 );
+
+// Endpoint /me para obtener usuario actual
+router.get('/me', authenticate, async (req, res) => {
+  try {
+    const user = await User.findById(req.user.id).select('-password');
+
+    if (!user) {
+      return res.status(404).json({ error: 'Usuario no encontrado' });
+    }
+
+    // Obtener empresas y roles del usuario (multi-tenant)
+    const userCompanies = await UserCompany.find({
+      user: user._id,
+      isActive: true
+    }).populate('company', 'name tax_id');
+
+    // Formatear companyRoles para el frontend
+    const companyRoles = {};
+    for (const uc of userCompanies) {
+      if (uc.company) {
+        companyRoles[uc.company._id.toString()] = {
+          name: uc.company.name,
+          roles: [uc.role]
+        };
+      }
+    }
+
+    res.json({
+      user: {
+        id: user._id,
+        email: user.email,
+        name: user.name,
+        role: user.role,
+        company_id: null,
+        companyRoles: Object.keys(companyRoles).length > 0 ? companyRoles : undefined
+      }
+    });
+  } catch (error) {
+    console.error('Error al obtener usuario:', error);
+    res.status(500).json({ error: 'Error al obtener usuario' });
+  }
+});
 
 module.exports = router;
 

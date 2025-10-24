@@ -1,3 +1,13 @@
+/**
+ * NOTA: Funcionalidad de PDF DESHABILITADA
+ *
+ * Este archivo contiene código de generación de PDF que NO se usa actualmente.
+ * Los contratos ahora se generan SOLO en formato Word con formato 100% preservado.
+ *
+ * Las funciones de PDF se mantienen aquí por si se necesitan en el futuro,
+ * pero actualmente NO están en uso en la aplicación.
+ */
+
 const { Document, Packer, Paragraph, TextRun, HeadingLevel } = require('docx');
 const PDFDocument = require('pdfkit');
 const Docxtemplater = require('docxtemplater');

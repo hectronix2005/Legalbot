@@ -7,7 +7,11 @@
     "dev": "nodemon server.js",
     "start": "node server.js",
     "init-db": "node scripts/initDatabase.js",
-    "init-mongo": "node scripts/initMongoDB.js"
+    "init-mongo": "node scripts/initMongoDB.js",
+    "backup": "node scripts/backup-database.js",
+    "restore": "node scripts/restore-database.js",
+    "health": "node scripts/health-check.js",
+    "auto-backup": "node scripts/auto-backup.js"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",

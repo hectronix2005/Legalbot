@@ -2,6 +2,8 @@ const express = require('express');
 const router = express.Router();
 const multer = require('multer');
 const mammoth = require('mammoth');
+const Docxtemplater = require('docxtemplater');
+const PizZip = require('pizzip');
 const { Document, Packer, Paragraph, TextRun } = require('docx');
 const path = require('path');
 const fs = require('fs');
@@ -542,6 +544,119 @@ function detectVariablesFromHtml(html) {
   return variables;
 }
 
+// Función optimizada para detectar variables desde texto plano (sin HTML)
+function detectVariablesFromText(plainText) {
+  console.log('🔍 Analizando texto plano para detectar variables con marcadores {{variable}}...');
+  console.log('Texto length:', plainText.length);
+
+  const variables = [];
+  const foundVariables = new Map();
+  const variableCounts = new Map();
+  const normalizedVariables = new Map();
+
+  // Buscar SOLO marcadores {{variable}}
+  const markerPattern = /\{\{([^}]+)\}\}/g;
+
+  console.log('🔍 Buscando marcadores {{variable}} en texto plano...');
+
+  let match;
+  while ((match = markerPattern.exec(plainText)) !== null) {
+    const variableText = match[1].trim();
+    console.log('✅ Variable encontrada:', variableText);
+
+    if (variableText) {
+      // Contar cuántas veces aparece
+      const count = variableCounts.get(variableText) || 0;
+      variableCounts.set(variableText, count + 1);
+
+      // Solo agregar si no se ha visto antes
+      if (!foundVariables.has(variableText)) {
+        foundVariables.set(variableText, true);
+
+        // Generar nombre de campo automáticamente
+        const autoName = generateAutoFieldName(variableText, variables.length + 1);
+
+        variables.push({
+          marker: variableText, // MANTENER EXACTO CON ESPACIOS: "RAZON SOCIAL"
+          original_marker: variableText, // MANTENER EXACTO CON ESPACIOS
+          name: autoName, // field_name normalizado: "razon_social"
+          field_name: autoName, // field_name normalizado: "razon_social"
+          field_label: variableText, // Para mostrar al usuario: "RAZON SOCIAL"
+          field_type: detectFieldType(variableText),
+          required: true,
+          description: `Variable detectada: ${variableText}`,
+          needsFieldName: true,
+          can_repeat: true,
+          repeat_count: 0,
+          is_repeated: false,
+          repeat_source: null
+        });
+        console.log(`✅ Variable agregada: marker="${variableText}" field_name="${autoName}"`);
+      }
+    }
+  }
+
+  // Detectar variables duplicadas
+  console.log('🔍 DETECTANDO VARIABLES DUPLICADAS...');
+  variables.forEach((variable, index) => {
+    const normalizedName = normalizeVariableName(variable.marker);
+    const existingIndex = normalizedVariables.get(normalizedName);
+
+    if (existingIndex !== undefined) {
+      variable.is_repeated = true;
+      variable.repeat_source = existingIndex + 1;
+      variable.repeat_count = 1;
+      variables[existingIndex].repeat_count = Math.max(variables[existingIndex].repeat_count, 2);
+    } else {
+      normalizedVariables.set(normalizedName, index);
+      variable.is_repeated = false;
+      variable.repeat_source = null;
+      variable.repeat_count = variableCounts.get(variable.marker) || 1;
+    }
+  });
+
+  // Actualizar conteo de repeticiones
+  variables.forEach(variable => {
+    const count = variableCounts.get(variable.marker) || 1;
+    if (!variable.is_repeated) {
+      variable.repeat_count = count;
+    }
+    console.log(`🔄 Variable "${variable.marker}" aparece ${count} veces`);
+  });
+
+  if (variables.length === 0) {
+    console.log('⚠️ No se detectaron marcadores {{variable}} en el documento');
+    console.log('💡 Sugerencia: Usa marcadores como {{ciudad}}, {{nombre_empresa}}, {{fecha_contrato}}');
+  }
+
+  console.log(`🎯 Total de variables detectadas: ${variables.length}`);
+
+  return variables;
+}
+
+// Detectar tipo de campo basado en el nombre de la variable
+function detectFieldType(variableName) {
+  const lowerName = variableName.toLowerCase();
+
+  if (lowerName.includes('fecha') || lowerName.includes('date')) {
+    return 'date';
+  }
+  if (lowerName.includes('email') || lowerName.includes('correo')) {
+    return 'email';
+  }
+  if (lowerName.includes('monto') || lowerName.includes('precio') ||
+      lowerName.includes('cantidad') || lowerName.includes('numero') ||
+      lowerName.includes('valor')) {
+    return 'number';
+  }
+  if (lowerName.includes('descripcion') || lowerName.includes('observacion') ||
+      lowerName.includes('notas') || lowerName.includes('comentario')) {
+    return 'textarea';
+  }
+
+  return 'text';
+}
+
 // Función para normalizar nombres de variables y detectar duplicadas
 function normalizeVariableName(marker) {
   return marker
@@ -556,19 +671,18 @@ function normalizeVariableName(marker) {
 
 // Función para generar nombres de campo automáticamente
 function generateAutoFieldName(marker, index) {
-  // Limpiar el marker de caracteres especiales
+  // IMPORTANTE: Limpiar el marker pero PRESERVAR ESPACIOS para el field_name
   const cleanMarker = marker
     .replace(/<[^>]*>/g, '') // Remover HTML tags
-    .replace(/[^\w\s]/g, '') // Remover caracteres especiales
     .trim()
     .toLowerCase()
-    .replace(/\s+/g, '_'); // Reemplazar espacios con guiones bajos
-  
-  // Si el marker está muy limpio, usarlo directamente
+    .replace(/\s+/g, '_'); // Reemplazar espacios con guiones bajos SOLO para field_name
+
+  // Si el marker está limpio, usarlo
   if (cleanMarker && cleanMarker.length > 2) {
     return cleanMarker;
   }
-  
+
   // Si no, generar un nombre genérico
   return `campo_${index}`;
 }
@@ -825,10 +939,10 @@ router.put('/template-variables/:id',
 );
 
 // Endpoint para procesar Word preservando formato completo
-router.post('/process-word-with-format', 
+router.post('/process-word-with-format',
   authenticate,
   authorize('admin', 'lawyer'),
-  upload.single('file'),
+  upload.single('wordFile'),
   async (req, res) => {
     try {
       if (!req.file) {
@@ -837,45 +951,55 @@ router.post('/process-word-with-format',
 
       const filePath = req.file.path;
       console.log('📄 PROCESANDO WORD CON FORMATO COMPLETO:', req.file.originalname);
-      
-      // Leer el documento Word preservando formato
-      const result = await mammoth.convertToHtml({ 
+      console.log('📁 Ruta del archivo:', filePath);
+
+      // IMPORTANTE: Extraer texto plano primero para detectar variables
+      console.log('🔍 EXTRAYENDO TEXTO PLANO PARA DETECTAR VARIABLES...');
+      const plainTextResult = await mammoth.extractRawText({ path: filePath });
+      const plainText = plainTextResult.value;
+
+      console.log('📄 Texto plano extraído, longitud:', plainText.length);
+      console.log('📄 Primeros 500 caracteres del texto plano:');
+      console.log(plainText.substring(0, 500));
+
+      // Verificar si hay marcadores {{}} en el texto plano
+      const markerTest = /\{\{([^}]+)\}\}/g;
+      const testMatches = plainText.match(markerTest);
+      console.log('🔍 Marcadores {{}} encontrados en texto plano:', testMatches ? testMatches.length : 0);
+      if (testMatches && testMatches.length > 0) {
+        console.log('🔍 Ejemplos de marcadores:', testMatches.slice(0, 10));
+      }
+
+      // Detectar variables desde el texto plano (sin HTML)
+      const variables = detectVariablesFromText(plainText);
+      console.log('✅ VARIABLES DETECTADAS:', variables.length);
+
+      if (variables.length > 0) {
+        console.log('📋 Variables detectadas:');
+        variables.forEach((v, i) => console.log(`  ${i+1}. {{${v.marker}}}`));
+      }
+
+      // OPCIONAL: También generar HTML preview para mostrar al usuario
+      const htmlResult = await mammoth.convertToHtml({
         path: filePath,
         styleMap: [
           "p[style-name='Heading 1'] => h1:fresh",
-          "p[style-name='Heading 2'] => h2:fresh", 
+          "p[style-name='Heading 2'] => h2:fresh",
           "p[style-name='Heading 3'] => h3:fresh",
           "p[style-name='Title'] => h1:fresh",
-          "p[style-name='Subtitle'] => h2:fresh",
-          "p[style-name='Quote'] => blockquote:fresh",
-          "p[style-name='Intense Quote'] => blockquote.intense:fresh",
-          "p[style-name='List Paragraph'] => p.list:fresh",
-          "p[style-name='Caption'] => p.caption:fresh",
-          "p[style-name='Footnote Text'] => p.footnote:fresh"
-        ],
-        convertImage: mammoth.images.imgElement(function(image) {
-          return image.read("base64").then(function(imageBuffer) {
-            return {
-              src: "data:" + image.contentType + ";base64," + imageBuffer
-            };
-          });
-        })
+          "p[style-name='Subtitle'] => h2:fresh"
+        ]
       });
-      
-      const html = result.value;
-      console.log('📄 HTML con formato preservado, longitud:', html.length);
-      
-      // Detectar variables manteniendo el HTML original
-      const variables = detectVariablesFromHtml(html);
-      console.log('✅ VARIABLES DETECTADAS:', variables.length);
-      
-      // Limpiar archivo temporal
-      try {
-        fs.unlinkSync(filePath);
-        console.log('🗑️ Archivo temporal eliminado');
-      } catch (cleanupError) {
-        console.log('⚠️ No se pudo eliminar archivo temporal:', cleanupError.message);
-      }
+      const html = htmlResult.value;
+
+      // IMPORTANTE: NO eliminar el archivo temporal todavía
+      // Lo necesitamos para crear la plantilla preservando formato
+      console.log('✅ Archivo Word preservado para crear plantilla:', filePath);
+      console.log('📁 Nombre del archivo:', req.file.filename);
+      console.log('📋 Variables que se enviarán al frontend:');
+      variables.forEach((v, i) => {
+        console.log(`  ${i+1}. marker="${v.marker}", field_name="${v.field_name}", field_label="${v.field_label}"`);
+      });
 
       res.json({
         variables: variables,
@@ -883,7 +1007,19 @@ router.post('/process-word-with-format',
         previewHtml: html.substring(0, 2000) + '...',
         message: `Se detectaron ${variables.length} variables con formato preservado`,
         requiresFieldNames: true,
-        preserveFormat: true
+        preserveFormat: true,
+        // Información del archivo Word original para usar en creación de plantilla
+        wordFile: {
+          path: filePath,
+          filename: req.file.filename,
+          originalName: req.file.originalname
+        },
+        debug: {
+          htmlLength: html.length,
+          markerCount: testMatches ? testMatches.length : 0,
+          exampleMarkers: testMatches ? testMatches.slice(0, 10) : [],
+          plainTextPreview: plainText.substring(0, 500)
+        }
       });
     } catch (error) {
       console.error('❌ ERROR PROCESANDO WORD CON FORMATO:');
@@ -1052,11 +1188,11 @@ router.post('/create-template-and-contract',
         return res.status(400).json({ error: 'No se proporcionó archivo Word' });
       }
 
-      const { name, description, contractData } = req.body;
-      
+      const { name, description, contractData, variables: variablesFromFrontend } = req.body;
+
       if (!name || !contractData) {
-        return res.status(400).json({ 
-          error: 'Se requieren: nombre de plantilla y datos del contrato' 
+        return res.status(400).json({
+          error: 'Se requieren: nombre de plantilla y datos del contrato'
         });
       }
 
@@ -1064,56 +1200,57 @@ router.post('/create-template-and-contract',
       console.log('  - Plantilla:', name);
       console.log('  - Descripción:', description);
       console.log('  - Archivo:', req.file.originalname);
+      console.log('  - Ruta archivo:', req.file.path);
       console.log('  - Datos contrato:', Object.keys(JSON.parse(contractData)).length, 'campos');
+      console.log('  - Variables recibidas del frontend:', variablesFromFrontend ? 'SÍ' : 'NO');
 
-      // 1. PROCESAR ARCHIVO WORD Y DETECTAR VARIABLES
-      console.log('🔍 PASO 1: PROCESANDO ARCHIVO WORD...');
-      
-      const result = await mammoth.convertToHtml({ 
+      // 1. USAR VARIABLES DEL FRONTEND (si están disponibles) o DETECTARLAS
+      let variables;
+
+      if (variablesFromFrontend) {
+        console.log('✅ PASO 1: USANDO VARIABLES ENVIADAS POR EL FRONTEND');
+        variables = JSON.parse(variablesFromFrontend);
+        console.log('📋 Variables recibidas:', variables.length);
+        variables.forEach((v, i) => {
+          console.log(`  ${i+1}. marker="${v.marker}", field_name="${v.field_name}"`);
+        });
+      } else {
+        console.log('🔍 PASO 1: DETECTANDO VARIABLES DESDE TEXTO PLANO...');
+        const plainTextResult = await mammoth.extractRawText({ path: req.file.path });
+        const plainText = plainTextResult.value;
+        console.log('📄 Texto plano extraído, longitud:', plainText.length);
+
+        variables = detectVariablesFromText(plainText);
+        console.log('✅ Variables detectadas:', variables.length);
+      }
+
+      // 2. GENERAR HTML PREVIEW (SOLO PARA VISUALIZACIÓN)
+      console.log('📄 PASO 2: GENERANDO PREVIEW HTML...');
+
+      const htmlResult = await mammoth.convertToHtml({
         path: req.file.path,
         styleMap: [
           "p[style-name='Heading 1'] => h1:fresh",
-          "p[style-name='Heading 2'] => h2:fresh", 
-          "p[style-name='Heading 3'] => h3:fresh",
-          "p[style-name='Title'] => h1:fresh",
-          "p[style-name='Subtitle'] => h2:fresh",
-          "p[style-name='Quote'] => blockquote:fresh",
-          "p[style-name='Intense Quote'] => blockquote.intense:fresh",
-          "p[style-name='List Paragraph'] => p.list:fresh",
-          "p[style-name='Caption'] => p.caption:fresh",
-          "p[style-name='Footnote Text'] => p.footnote:fresh",
-          "r[style-name='Strong'] => strong",
-          "r[style-name='Emphasis'] => em"
-        ],
-        convertImage: mammoth.images.imgElement(function(image) {
-          return image.read("base64").then(function(imageBuffer) {
-            return {
-              src: "data:" + image.contentType + ";base64," + imageBuffer
-            };
-          });
-        })
+          "p[style-name='Heading 2'] => h2:fresh",
+          "p[style-name='Heading 3'] => h3:fresh"
+        ]
       });
-      
-      const html = result.value;
-      console.log('✅ HTML generado, longitud:', html.length);
 
-      // 2. DETECTAR VARIABLES CON LÓGICA MEJORADA
-      console.log('🔍 PASO 2: DETECTANDO VARIABLES...');
-      const variables = detectVariablesFromHtml(html);
-      console.log('✅ Variables detectadas:', variables.length);
+      const html = htmlResult.value;
+      console.log('✅ HTML preview generado, longitud:', html.length);
 
       // 3. CREAR PLANTILLA EN LA BASE DE DATOS
       console.log('🏗️ PASO 3: CREANDO PLANTILLA...');
-      
+
       const templateData = {
         name,
         description: description || '',
         category: 'Confidencialidad',
-        content: html,
+        content: html, // HTML solo para preview
         fields: variables.map((variable, index) => ({
           field_name: variable.field_name,
           field_label: variable.original_marker || variable.field_name,
-          field_type: variable.type,
+          field_type: variable.field_type,
           field_options: [],
           required: variable.required,
           display_order: index,
@@ -1126,39 +1263,176 @@ router.post('/create-template-and-contract',
         })),
         company: req.user.company_id || null,
         created_by: req.user.id,
-        word_file_path: req.file.filename,
+        word_file_path: req.file.path, // 🔥 RUTA COMPLETA del archivo Word original
         word_file_original_name: req.file.originalname,
         version: 1,
         is_current: true,
         active: true
       };
-      
+
       const template = await ContractTemplate.create(templateData);
       console.log('✅ Plantilla creada:', template._id);
+      console.log('📁 Archivo Word guardado en:', req.file.path);
 
-      // 4. GENERAR CONTRATO INMEDIATAMENTE
-      console.log('📄 PASO 4: GENERANDO CONTRATO...');
-      
+      // 4. GENERAR CONTRATO USANDO DOCXTEMPLATER (PRESERVA FORMATO)
+      console.log('📄 PASO 4: GENERANDO CONTRATO CON FORMATO PRESERVADO...');
+
       const contractDataParsed = JSON.parse(contractData);
-      const contractNumber = `CON-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-      
-      // Procesar contenido con datos del contrato
-      let contractContent = html;
-      for (const [key, value] of Object.entries(contractDataParsed)) {
-        const regex = new RegExp(`{{${key}}}`, 'g');
-        contractContent = contractContent.replace(regex, value);
+      const contractNumber = `CON-${new Date().getFullYear()}-${String(Date.now()).slice(-6)}`;
+
+      console.log('🔧 Usando Docxtemplater para generar contrato...');
+      console.log('📁 Plantilla Word:', req.file.path);
+      console.log('📝 Datos recibidos del frontend:', contractDataParsed);
+
+      // IMPORTANTE: Mapear field_name a marker original
+      // El frontend envía datos con field_name como key, pero Docxtemplater necesita el marker original
+      console.log('\n🔍 ========== DIAGNÓSTICO DE MAPEO DE VARIABLES ==========');
+      console.log('📋 Variables detectadas del documento Word:');
+      variables.forEach((v, i) => {
+        console.log(`  ${i+1}. marker: "{{${v.marker}}}" (documento)`);
+        console.log(`      field_name: "${v.field_name}" (formulario)`);
+        console.log(`      field_label: "${v.field_label}" (etiqueta)`);
+      });
+
+      console.log('\n📋 Datos recibidos del frontend (del formulario):');
+      Object.entries(contractDataParsed).forEach(([key, value]) => {
+        console.log(`  "${key}" = "${value}"`);
+      });
+
+      // ESTRATEGIA DE MAPEO MÚLTIPLE (para máxima compatibilidad)
+      const mappedData = {};
+
+      // MÉTODO 1: Mapeo directo por field_name
+      variables.forEach(variable => {
+        const fieldName = variable.field_name;
+        const marker = variable.marker;
+
+        if (contractDataParsed[fieldName] !== undefined && contractDataParsed[fieldName] !== '') {
+          mappedData[marker] = contractDataParsed[fieldName];
+          console.log(`  ✅ MATCH (field_name): "${fieldName}" -> {{${marker}}} = "${contractDataParsed[fieldName]}"`);
+        }
+      });
+
+      // MÉTODO 2: Mapeo case-insensitive (por si hay diferencias de mayúsculas)
+      const unmappedData = Object.keys(contractDataParsed).filter(key =>
+        !variables.some(v => v.field_name === key)
+      );
+
+      if (unmappedData.length > 0) {
+        console.log('\n🔍 Buscando coincidencias case-insensitive para:', unmappedData);
+
+        unmappedData.forEach(dataKey => {
+          const matchingVar = variables.find(v =>
+            v.field_name.toLowerCase() === dataKey.toLowerCase() ||
+            v.marker.toLowerCase() === dataKey.toLowerCase()
+          );
+
+          if (matchingVar && contractDataParsed[dataKey]) {
+            mappedData[matchingVar.marker] = contractDataParsed[dataKey];
+            console.log(`  ✅ MATCH (case-insensitive): "${dataKey}" -> {{${matchingVar.marker}}} = "${contractDataParsed[dataKey]}"`);
+          }
+        });
       }
 
-      // Crear contrato
+      // MÉTODO 3: Mapeo directo si los keys del frontend coinciden con los markers
+      Object.entries(contractDataParsed).forEach(([key, value]) => {
+        const exactMatch = variables.find(v => v.marker === key);
+        if (exactMatch && value && !mappedData[key]) {
+          mappedData[key] = value;
+          console.log(`  ✅ MATCH (marker directo): {{${key}}} = "${value}"`);
+        }
+      });
+
+      console.log('\n📝 ========== DATOS MAPEADOS FINALES ==========');
+      if (Object.keys(mappedData).length === 0) {
+        console.log('  ⚠️ ¡ADVERTENCIA! No se mapeó ninguna variable');
+        console.log('  ⚠️ El documento generado tendrá "undefined" en todas las variables');
+      } else {
+        Object.entries(mappedData).forEach(([marker, value]) => {
+          console.log(`  {{${marker}}} = "${value}"`);
+        });
+      }
+      console.log(`📊 Total: ${Object.keys(mappedData).length} variables mapeadas de ${variables.length} detectadas\n`);
+
+      // Leer la plantilla Word original
+      const templateBuffer = fs.readFileSync(req.file.path);
+      const zip = new PizZip(templateBuffer);
+
+      // Crear instancia de Docxtemplater con manejo de errores
+      const doc = new Docxtemplater(zip, {
+        paragraphLoop: true,
+        linebreaks: true,
+        delimiters: {
+          start: '{{',
+          end: '}}'
+        },
+        nullGetter: function(part, scopeManager) {
+          // Esto se llama cuando una variable no tiene valor
+          console.log(`⚠️  Variable sin valor encontrada: {{${part.value}}}`);
+          return ''; // Retornar string vacío en lugar de undefined
+        }
+      });
+
+      // Reemplazar variables en la plantilla preservando formato
+      console.log('\n🔄 ========== REEMPLAZANDO VARIABLES EN WORD ==========');
+      try {
+        doc.render(mappedData);
+        console.log('✅ Reemplazo completado exitosamente');
+      } catch (error) {
+        console.error('❌ ERROR EN DOCXTEMPLATER:');
+        console.error('  Tipo:', error.name);
+        console.error('  Mensaje:', error.message);
+        if (error.properties) {
+          console.error('  Propiedades:', JSON.stringify(error.properties, null, 2));
+        }
+        throw error;
+      }
+
+      // Generar el documento final
+      const contractBuffer = doc.getZip().generate({
+        type: 'nodebuffer',
+        compression: 'DEFLATE',
+      });
+
+      // Guardar el contrato generado
+      const contractsDir = path.join(__dirname, '../uploads/contracts');
+      if (!fs.existsSync(contractsDir)) {
+        fs.mkdirSync(contractsDir, { recursive: true });
+      }
+
+      const contractFileName = `contrato_${contractNumber}_${Date.now()}.docx`;
+      const contractFilePath = path.join(contractsDir, contractFileName);
+      fs.writeFileSync(contractFilePath, contractBuffer);
+
+      console.log('\n✅ ========== CONTRATO GENERADO ==========');
+      console.log('📄 Archivo:', contractFileName);
+      console.log('📁 Ruta:', contractFilePath);
+      console.log('📊 Tamaño:', (contractBuffer.length / 1024).toFixed(2), 'KB');
+      console.log('✅ Formato preservado: SÍ');
+      console.log('✅ Variables reemplazadas:', Object.keys(mappedData).length);
+      console.log('==========================================\n');
+
+      // Procesar HTML para preview (reemplazando variables con markers correctos)
+      let contractContentHtml = html;
+      for (const [marker, value] of Object.entries(mappedData)) {
+        // Escapar caracteres especiales de regex en el marker
+        const escapedMarker = marker.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        const regex = new RegExp(`\\{\\{${escapedMarker}\\}\\}`, 'g');
+        contractContentHtml = contractContentHtml.replace(regex, value);
+        console.log(`  🔄 HTML: Reemplazando {{${marker}}} con "${value}"`);
+      }
+
+      // Crear contrato en BD
       const contract = await Contract.create({
         template: template._id,
         contract_number: contractNumber,
-        content: contractContent,
+        content: contractContentHtml, // HTML para preview
+        file_path: contractFilePath, // Ruta del contrato Word generado
         generated_by: req.user.id,
         status: 'active'
       });
-      
-      console.log('✅ Contrato generado:', contract._id);
+
+      console.log('✅ Contrato creado en BD:', contract._id);
 
       // 5. LOG DE ACTIVIDAD
       console.log('📝 PASO 5: REGISTRANDO ACTIVIDAD...');
@@ -1179,31 +1453,31 @@ router.post('/create-template-and-contract',
         description: `Generó contrato ${contractNumber} desde plantilla ${name}`
       });
 
-      // 6. LIMPIAR ARCHIVO TEMPORAL
-      try {
-        fs.unlinkSync(req.file.path);
-        console.log('🗑️ Archivo temporal eliminado');
-      } catch (cleanupError) {
-        console.log('⚠️ No se pudo eliminar archivo temporal:', cleanupError.message);
-      }
+      // 6. NO ELIMINAR ARCHIVO WORD - SE USA COMO PLANTILLA
+      console.log('📁 Archivo Word de plantilla conservado:', req.file.path);
+      console.log('📁 Contrato Word generado:', contractFilePath);
 
       console.log('🎉 PROCESO UNIFICADO COMPLETADO EXITOSAMENTE');
       console.log('===========================================');
 
       res.status(201).json({
-        message: 'Plantilla creada y contrato generado exitosamente',
+        message: 'Plantilla creada y contrato generado exitosamente con formato preservado',
         template: {
           id: template._id,
           name: template.name,
-          fields_count: template.fields.length
+          fields_count: template.fields.length,
+          word_file_path: req.file.path
         },
         contract: {
           id: contract._id,
           contract_number: contractNumber,
-          status: contract.status
+          status: contract.status,
+          file_path: contractFilePath
         },
         variables_detected: variables.length,
-        unified_process: true
+        unified_process: true,
+        format_preserved: true,
+        note: 'El contrato ha sido generado preservando todo el formato del documento Word original'
       });
 
     } catch (error) {

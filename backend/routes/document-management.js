@@ -30,28 +30,9 @@ router.get('/download/word/:contractId', authenticate, async (req, res) => {
   }
 });
 
-// Descargar documento PDF
-router.get('/download/pdf/:contractId', authenticate, async (req, res) => {
-  try {
-    const { contractId } = req.params;
-    
-    const contract = await Contract.findById(contractId);
-    if (!contract) {
-      return res.status(404).json({ error: 'Contrato no encontrado' });
-    }
-
-    if (!contract.pdf_path || !fs.existsSync(contract.pdf_path)) {
-      return res.status(404).json({ error: 'Archivo PDF no encontrado' });
-    }
-
-    const fileName = `contrato_${contract.contract_number}.pdf`;
-    res.download(contract.pdf_path, fileName);
-    
-  } catch (error) {
-    console.error('Error descargando PDF:', error);
-    res.status(500).json({ error: 'Error descargando documento' });
-  }
-});
+// NOTA: Funcionalidad de PDF deshabilitada
+// Los contratos ahora solo se generan en formato Word con formato preservado
+// Si se necesita PDF en el futuro, se puede usar una librería de conversión Word->PDF
 
 // Obtener versiones de un contrato
 router.get('/versions/:contractId', authenticate, async (req, res) => {

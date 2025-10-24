@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { authenticate, authorize } = require('../middleware/auth');
+const { authenticate, authorize, verifyTenant, authorizeCompanyRole } = require('../middleware/auth');
 const { body, validationResult } = require('express-validator');
 const path = require('path');
 const fs = require('fs');
@@ -12,12 +12,20 @@ const ContractTemplate = require('../models/ContractTemplate');
 const ActivityLog = require('../models/ActivityLog');
 
 // Obtener todos los contratos
-router.get('/', authenticate, async (req, res) => {
+router.get('/', authenticate, verifyTenant, async (req, res) => {
   try {
-    const { company_id, status } = req.query;
-    
+    const { status } = req.query;
+
     const filter = {};
-    
+
+    // Super admin puede ver todas las empresas o filtrar por la seleccionada
+    if (req.user.role === 'super_admin' && !req.companyId) {
+      // Ver todos los contratos
+    } else if (req.companyId) {
+      // Filtrar por empresa seleccionada
+      filter.company = req.companyId;
+    }
+
     if (status) filter.status = status;
 
     const contracts = await Contract.find(filter)
@@ -25,19 +33,7 @@ router.get('/', authenticate, async (req, res) => {
       .populate('template', 'name category')
       .sort({ createdAt: -1 });
 
-    // Filtrar por empresa si no es admin
-    let filteredContracts = contracts;
-    if (req.user.role !== 'admin' && req.user.role !== 'super_admin' && req.user.company_id) {
-      filteredContracts = contracts.filter(c => 
-        c.company === req.user.company_id
-      );
-    } else if (company_id) {
-      filteredContracts = contracts.filter(c => 
-        c.company === company_id
-      );
-    }
-
-    res.json(filteredContracts);
+    res.json(contracts);
   } catch (error) {
     console.error('Error al obtener contratos:', error);
     res.status(500).json({ error: 'Error al obtener contratos' });
@@ -45,7 +41,7 @@ router.get('/', authenticate, async (req, res) => {
 });
 
 // Obtener un contrato
-router.get('/:id', authenticate, async (req, res) => {
+router.get('/:id', authenticate, verifyTenant, async (req, res) => {
   try {
     const contract = await Contract.findById(req.params.id)
       .populate({
@@ -62,6 +58,13 @@ router.get('/:id', authenticate, async (req, res) => {
       return res.status(404).json({ error: 'Contrato no encontrado' });
     }
 
+    // Verificar que el contrato pertenece a la empresa (excepto super_admin)
+    if (req.user.role !== 'super_admin') {
+      if (contract.company && contract.company.toString() !== req.companyId) {
+        return res.status(403).json({ error: 'No tienes acceso a este contrato' });
+      }
+    }
+
     res.json(contract);
   } catch (error) {
     console.error('Error al obtener contrato:', error);
@@ -72,10 +75,11 @@ router.get('/:id', authenticate, async (req, res) => {
 // Crear contrato
 router.post('/',
   authenticate,
-  authorize('admin', 'lawyer'),
+  verifyTenant,
+  authorizeCompanyRole('admin', 'lawyer'),
   [
     body('title').notEmpty().withMessage('El título es requerido'),
-    body('company').notEmpty().withMessage('La empresa es requerida'),
+    body('company').optional(),
     body('status').optional().isIn(['borrador', 'revision', 'aprobado', 'firmado', 'cancelado'])
   ],
   async (req, res) => {
@@ -85,11 +89,12 @@ router.post('/',
         return res.status(400).json({ errors: errors.array() });
       }
 
-      const { title, company, status, description, template_id } = req.body;
+      const { title, status, description, template_id } = req.body;
 
+      // Usar companyId del tenant verification
       const contract = await SimpleContract.create({
         title,
-        company,
+        company: req.companyId,
         status: status || 'borrador',
         description: description || '',
         template: template_id || null,
@@ -102,12 +107,13 @@ router.post('/',
         action: 'CREATE',
         entity_type: 'contract',
         entity_id: contract._id,
-        description: `Creó el contrato: ${title}`
+        description: `Creó el contrato: ${title}`,
+        company: req.companyId
       });
 
-      res.status(201).json({ 
+      res.status(201).json({
         message: 'Contrato creado exitosamente',
-        id: contract._id 
+        id: contract._id
       });
     } catch (error) {
       console.error('Error al crear contrato:', error);
@@ -181,7 +187,7 @@ router.post('/generate/:requestId',
   }
 );
 
-// Descargar contrato en Word
+// Descargar contrato en Word (con formato preservado)
 router.get('/:id/download-word',
   authenticate,
   async (req, res) => {
@@ -194,18 +200,34 @@ router.get('/:id/download-word',
         return res.status(404).json({ error: 'Contrato no encontrado' });
       }
 
+      // NUEVO: Si el contrato ya tiene un archivo Word generado, devolverlo directamente
+      if (contract.file_path && fs.existsSync(contract.file_path)) {
+        console.log('📄 Descargando contrato Word pre-generado:', contract.file_path);
+
+        const contractBuffer = fs.readFileSync(contract.file_path);
+        const downloadName = `${contract.contract_number}.docx`;
+
+        res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
+        res.setHeader('Content-Disposition', `attachment; filename="${downloadName}"`);
+        res.send(contractBuffer);
+        return;
+      }
+
+      // FALLBACK: Si no hay archivo pre-generado, generar desde plantilla (contratos antiguos)
+      console.log('📄 Generando contrato Word desde plantilla...');
+
       if (!contract.template.word_file_path) {
         return res.status(400).json({ error: 'Esta plantilla no tiene un archivo Word asociado' });
       }
 
       if (!fs.existsSync(contract.template.word_file_path)) {
-        return res.status(404).json({ error: 'Archivo Word no encontrado' });
+        return res.status(404).json({ error: 'Archivo Word de plantilla no encontrado' });
       }
 
       const templateBuffer = fs.readFileSync(contract.template.word_file_path);
-      
+
       // Convertir Map a objeto plano
-      const fieldData = Object.fromEntries(contract.request.field_data);
+      const fieldData = contract.request ? Object.fromEntries(contract.request.field_data) : {};
       const generatedBuffer = generateDocumentFromTemplate(templateBuffer, fieldData);
 
       const downloadName = `${contract.contract_number}.docx`;
@@ -252,20 +274,20 @@ router.patch('/:id/status',
 );
 
 // Actualizar un contrato
-router.put('/:id', authenticate, async (req, res) => {
+router.put('/:id', authenticate, verifyTenant, authorizeCompanyRole('admin', 'lawyer'), async (req, res) => {
   try {
     const { id } = req.params;
     const { title, company, status, description } = req.body;
-    
+
     const contract = await Contract.findById(id);
     if (!contract) {
       return res.status(404).json({ error: 'Contrato no encontrado' });
     }
 
-    // Verificar permisos
-    if (req.user.role !== 'super_admin' && req.user.role !== 'admin') {
-      if (contract.company && contract.company.toString() !== req.user.company_id.toString()) {
-        return res.status(403).json({ error: 'No tienes permisos para editar este contrato' });
+    // Verificar que el contrato pertenece a la empresa (excepto super_admin)
+    if (req.user.role !== 'super_admin') {
+      if (contract.company && contract.company.toString() !== req.companyId) {
+        return res.status(403).json({ error: 'No tienes acceso a este contrato' });
       }
     }
 
@@ -287,12 +309,13 @@ router.put('/:id', authenticate, async (req, res) => {
         contract_id: contract._id,
         changes: { title, company, status, description }
       },
+      company: req.companyId,
       timestamp: new Date()
     });
 
-    res.json({ 
+    res.json({
       message: 'Contrato actualizado exitosamente',
-      contract 
+      contract
     });
   } catch (error) {
     console.error('Error al actualizar contrato:', error);
@@ -301,19 +324,19 @@ router.put('/:id', authenticate, async (req, res) => {
 });
 
 // Eliminar un contrato
-router.delete('/:id', authenticate, async (req, res) => {
+router.delete('/:id', authenticate, verifyTenant, authorizeCompanyRole('admin', 'lawyer'), async (req, res) => {
   try {
     const { id } = req.params;
-    
+
     const contract = await Contract.findById(id);
     if (!contract) {
       return res.status(404).json({ error: 'Contrato no encontrado' });
     }
 
-    // Verificar permisos
-    if (req.user.role !== 'super_admin' && req.user.role !== 'admin') {
-      if (contract.company && contract.company.toString() !== req.user.company_id.toString()) {
-        return res.status(403).json({ error: 'No tienes permisos para eliminar este contrato' });
+    // Verificar que el contrato pertenece a la empresa (excepto super_admin)
+    if (req.user.role !== 'super_admin') {
+      if (contract.company && contract.company.toString() !== req.companyId) {
+        return res.status(403).json({ error: 'No tienes acceso a este contrato' });
       }
     }
 
@@ -329,6 +352,7 @@ router.delete('/:id', authenticate, async (req, res) => {
         contract_id: contract._id,
         contract_number: contract.contract_number
       },
+      company: req.companyId,
       timestamp: new Date()
     });
 

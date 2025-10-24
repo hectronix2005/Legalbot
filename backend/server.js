@@ -3,6 +3,7 @@ const cors = require('cors');
 const path = require('path');
 require('dotenv').config();
 const connectDB = require('./config/mongodb');
+const { dataProtectionMiddleware, verifyDataIntegrity, createAutomaticBackup } = require('./middleware/dataProtection');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -14,6 +15,9 @@ connectDB();
 app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+
+// Middleware de protección de datos
+app.use(dataProtectionMiddleware);
 
 // Crear directorio de uploads si no existe
 const fs = require('fs');
@@ -78,9 +82,29 @@ app.use((err, req, res, next) => {
   res.status(500).json({ error: 'Error interno del servidor' });
 });
 
+// Verificar integridad de datos al iniciar
+const initializeDataProtection = async () => {
+  try {
+    console.log('🔍 Verificando integridad de datos...');
+    const isHealthy = await verifyDataIntegrity();
+    
+    if (!isHealthy) {
+      console.log('⚠️  Creando respaldo de emergencia...');
+      await createAutomaticBackup();
+    }
+    
+    console.log('✅ Protección de datos inicializada');
+  } catch (error) {
+    console.error('❌ Error inicializando protección de datos:', error);
+  }
+};
+
 // Iniciar servidor
-app.listen(PORT, () => {
+app.listen(PORT, async () => {
   console.log(`🚀 Servidor corriendo en http://localhost:${PORT}`);
   console.log(`📊 Ambiente: ${process.env.NODE_ENV || 'development'}`);
+  
+  // Inicializar protección de datos
+  await initializeDataProtection();
 });
 
