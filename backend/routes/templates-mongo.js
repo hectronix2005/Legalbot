@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { authenticate, authorize } = require('../middleware/auth');
+const { authenticate, authorize, verifyTenant } = require('../middleware/auth');
 const { body, validationResult } = require('express-validator');
 const multer = require('multer');
 const path = require('path');
@@ -39,42 +39,21 @@ const upload = multer({
   }
 });
 
-// Obtener todas las plantillas (ruta pública para verificar)
-router.get('/public', async (req, res) => {
+// Obtener todas las plantillas de la empresa
+router.get('/', authenticate, verifyTenant, async (req, res) => {
   try {
-    const templates = await ContractTemplate.find({ active: true })
-      .select('name description category createdAt')
-      .sort({ createdAt: -1 });
+    const { category, is_current } = req.query;
 
-    res.json({
-      success: true,
-      count: templates.length,
-      templates: templates
-    });
-  } catch (error) {
-    console.error('Error al obtener plantillas públicas:', error);
-    res.status(500).json({ error: 'Error al obtener plantillas' });
-  }
-});
+    // SIEMPRE filtrar por la empresa del usuario actual
+    const filter = {
+      active: true,
+      company: req.companyId // Solo plantillas de la empresa del usuario
+    };
 
-// Obtener todas las plantillas
-router.get('/', authenticate, async (req, res) => {
-  try {
-    const { company_id, category, is_current } = req.query;
-    
-    const filter = { active: true };
-    
-    if (company_id) {
-      filter.$or = [
-        { company: company_id },
-        { company: null }
-      ];
-    }
-    
     if (category) {
       filter.category = category;
     }
-    
+
     if (is_current) {
       filter.is_current = true;
     }
@@ -94,6 +73,7 @@ router.get('/', authenticate, async (req, res) => {
 // Procesar archivo Word
 router.post('/upload-word',
   authenticate,
+  verifyTenant,
   authorize('admin', 'lawyer'),
   upload.single('wordFile'),
   async (req, res) => {
@@ -124,15 +104,19 @@ router.post('/upload-word',
   }
 );
 
-// Obtener una plantilla
-router.get('/:id', authenticate, async (req, res) => {
+// Obtener una plantilla específica de la empresa
+router.get('/:id', authenticate, verifyTenant, async (req, res) => {
   try {
-    const template = await ContractTemplate.findById(req.params.id)
+    // Buscar plantilla solo si pertenece a la empresa del usuario
+    const template = await ContractTemplate.findOne({
+      _id: req.params.id,
+      company: req.companyId // Verificar que pertenece a la empresa
+    })
       .populate('created_by', 'name')
       .populate('company', 'name');
 
     if (!template) {
-      return res.status(404).json({ error: 'Plantilla no encontrada' });
+      return res.status(404).json({ error: 'Plantilla no encontrada o no tiene acceso a ella' });
     }
 
     res.json(template);
@@ -142,9 +126,10 @@ router.get('/:id', authenticate, async (req, res) => {
   }
 });
 
-// Crear plantilla
+// Crear plantilla para la empresa
 router.post('/',
   authenticate,
+  verifyTenant,
   authorize('admin', 'lawyer'),
   [
     body('name').notEmpty().withMessage('El nombre es requerido')
@@ -156,20 +141,20 @@ router.post('/',
         return res.status(400).json({ errors: errors.array() });
       }
 
-      const { name, description, category, content, company_id, fields, wordFilePath, wordFileOriginalName } = req.body;
+      const { name, description, category, content, fields, wordFilePath, wordFileOriginalName } = req.body;
 
       if (!content && !wordFilePath) {
         return res.status(400).json({ error: 'Debe proporcionar contenido o un archivo Word' });
       }
 
-      // Crear plantilla
+      // Crear plantilla SIEMPRE para la empresa del usuario actual
       const template = await ContractTemplate.create({
         name,
         description,
         category,
         content: content || '',
         fields: fields || [],
-        company: company_id || null,
+        company: req.companyId, // SIEMPRE usar la empresa del usuario autenticado
         created_by: req.user.id,
         word_file_path: wordFilePath || null,
         word_file_original_name: wordFileOriginalName || null,
@@ -208,15 +193,20 @@ router.post('/',
 // Actualizar plantilla (crea nueva versión)
 router.put('/:id',
   authenticate,
+  verifyTenant,
   authorize('admin', 'lawyer'),
   async (req, res) => {
     try {
       const { content, changes_description, fields } = req.body;
 
-      const template = await ContractTemplate.findById(req.params.id);
-      
+      // Buscar plantilla solo si pertenece a la empresa del usuario
+      const template = await ContractTemplate.findOne({
+        _id: req.params.id,
+        company: req.companyId // Verificar que pertenece a la empresa
+      });
+
       if (!template) {
-        return res.status(404).json({ error: 'Plantilla no encontrada' });
+        return res.status(404).json({ error: 'Plantilla no encontrada o no tiene acceso a ella' });
       }
 
       const newVersion = template.version + 1;
@@ -257,8 +247,18 @@ router.put('/:id',
 );
 
 // Obtener historial de versiones
-router.get('/:id/versions', authenticate, async (req, res) => {
+router.get('/:id/versions', authenticate, verifyTenant, async (req, res) => {
   try {
+    // Verificar que la plantilla pertenece a la empresa del usuario
+    const template = await ContractTemplate.findOne({
+      _id: req.params.id,
+      company: req.companyId
+    });
+
+    if (!template) {
+      return res.status(404).json({ error: 'Plantilla no encontrada o no tiene acceso a ella' });
+    }
+
     const versions = await VersionHistory.find({ template: req.params.id })
       .populate('created_by', 'name')
       .sort({ version: -1 });
@@ -271,16 +271,29 @@ router.get('/:id/versions', authenticate, async (req, res) => {
 });
 
 // Desactivar plantilla
-router.delete('/:id', authenticate, authorize('admin', 'lawyer'), async (req, res) => {
+router.delete('/:id', authenticate, verifyTenant, authorize('admin', 'lawyer'), async (req, res) => {
   try {
-    await ContractTemplate.findByIdAndUpdate(req.params.id, { active: false });
-    
+    // Verificar que la plantilla pertenece a la empresa del usuario antes de desactivar
+    const template = await ContractTemplate.findOneAndUpdate(
+      {
+        _id: req.params.id,
+        company: req.companyId // Solo desactivar si pertenece a la empresa
+      },
+      { active: false },
+      { new: true }
+    );
+
+    if (!template) {
+      return res.status(404).json({ error: 'Plantilla no encontrada o no tiene acceso a ella' });
+    }
+
     await ActivityLog.create({
       user: req.user.id,
       action: 'DELETE',
       entity_type: 'template',
       entity_id: req.params.id,
-      description: 'Desactivó plantilla'
+      description: 'Desactivó plantilla',
+      company: req.companyId
     });
 
     res.json({ message: 'Plantilla desactivada exitosamente' });

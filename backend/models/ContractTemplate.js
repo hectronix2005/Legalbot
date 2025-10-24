@@ -83,7 +83,8 @@ const contractTemplateSchema = new mongoose.Schema({
   company: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Company',
-    default: null
+    required: true,
+    index: true // Índice para mejorar rendimiento de queries por empresa
   },
   created_by: {
     type: mongoose.Schema.Types.ObjectId,
