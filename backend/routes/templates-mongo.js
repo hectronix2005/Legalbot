@@ -39,15 +39,18 @@ const upload = multer({
   }
 });
 
-// Obtener todas las plantillas de la empresa
+// Obtener todas las plantillas de la empresa + plantillas compartidas
 router.get('/', authenticate, verifyTenant, async (req, res) => {
   try {
     const { category, is_current } = req.query;
 
-    // SIEMPRE filtrar por la empresa del usuario actual
+    // Filtrar por plantillas de la empresa O plantillas compartidas
     const filter = {
       active: true,
-      company: req.companyId // Solo plantillas de la empresa del usuario
+      $or: [
+        { company: req.companyId },      // Plantillas de la empresa
+        { is_shared: true }              // Plantillas compartidas (super_admin)
+      ]
     };
 
     if (category) {
@@ -104,13 +107,16 @@ router.post('/upload-word',
   }
 );
 
-// Obtener una plantilla específica de la empresa
+// Obtener una plantilla específica (de la empresa o compartida)
 router.get('/:id', authenticate, verifyTenant, async (req, res) => {
   try {
-    // Buscar plantilla solo si pertenece a la empresa del usuario
+    // Buscar plantilla si pertenece a la empresa o es compartida
     const template = await ContractTemplate.findOne({
       _id: req.params.id,
-      company: req.companyId // Verificar que pertenece a la empresa
+      $or: [
+        { company: req.companyId },      // Plantilla de la empresa
+        { is_shared: true }              // Plantilla compartida
+      ]
     })
       .populate('created_by', 'name')
       .populate('company', 'name');
@@ -126,7 +132,7 @@ router.get('/:id', authenticate, verifyTenant, async (req, res) => {
   }
 });
 
-// Crear plantilla para la empresa
+// Crear plantilla para la empresa o plantilla compartida (solo super_admin)
 router.post('/',
   authenticate,
   verifyTenant,
@@ -141,25 +147,40 @@ router.post('/',
         return res.status(400).json({ errors: errors.array() });
       }
 
-      const { name, description, category, content, fields, wordFilePath, wordFileOriginalName } = req.body;
+      const { name, description, category, content, fields, wordFilePath, wordFileOriginalName, is_shared } = req.body;
 
       if (!content && !wordFilePath) {
         return res.status(400).json({ error: 'Debe proporcionar contenido o un archivo Word' });
       }
 
-      // Crear plantilla SIEMPRE para la empresa del usuario actual
-      const template = await ContractTemplate.create({
+      // Verificar permisos para plantillas compartidas
+      if (is_shared && req.user.role !== 'super_admin') {
+        return res.status(403).json({
+          error: 'Solo el super administrador puede crear plantillas compartidas'
+        });
+      }
+
+      // Crear plantilla
+      const templateData = {
         name,
         description,
         category,
         content: content || '',
         fields: fields || [],
-        company: req.companyId, // SIEMPRE usar la empresa del usuario autenticado
         created_by: req.user.id,
         word_file_path: wordFilePath || null,
         word_file_original_name: wordFileOriginalName || null,
-        version: 1
-      });
+        version: 1,
+        is_shared: is_shared || false
+      };
+
+      // Si es plantilla compartida, no asignar empresa
+      // Si no es compartida, asignar la empresa del usuario
+      if (!is_shared) {
+        templateData.company = req.companyId;
+      }
+
+      const template = await ContractTemplate.create(templateData);
 
       // Guardar en historial
       await VersionHistory.create({
@@ -199,14 +220,28 @@ router.put('/:id',
     try {
       const { content, changes_description, fields } = req.body;
 
-      // Buscar plantilla solo si pertenece a la empresa del usuario
-      const template = await ContractTemplate.findOne({
-        _id: req.params.id,
-        company: req.companyId // Verificar que pertenece a la empresa
-      });
+      // Buscar plantilla
+      const template = await ContractTemplate.findById(req.params.id);
 
       if (!template) {
-        return res.status(404).json({ error: 'Plantilla no encontrada o no tiene acceso a ella' });
+        return res.status(404).json({ error: 'Plantilla no encontrada' });
+      }
+
+      // Verificar permisos
+      if (template.is_shared) {
+        // Solo super_admin puede editar plantillas compartidas
+        if (req.user.role !== 'super_admin') {
+          return res.status(403).json({
+            error: 'Solo el super administrador puede editar plantillas compartidas'
+          });
+        }
+      } else {
+        // Para plantillas normales, verificar que pertenece a la empresa
+        if (!template.company || template.company.toString() !== req.companyId.toString()) {
+          return res.status(403).json({
+            error: 'No tiene acceso a esta plantilla'
+          });
+        }
       }
 
       const newVersion = template.version + 1;
@@ -249,10 +284,13 @@ router.put('/:id',
 // Obtener historial de versiones
 router.get('/:id/versions', authenticate, verifyTenant, async (req, res) => {
   try {
-    // Verificar que la plantilla pertenece a la empresa del usuario
+    // Buscar plantilla (de la empresa o compartida)
     const template = await ContractTemplate.findOne({
       _id: req.params.id,
-      company: req.companyId
+      $or: [
+        { company: req.companyId },      // Plantilla de la empresa
+        { is_shared: true }              // Plantilla compartida
+      ]
     });
 
     if (!template) {
@@ -273,27 +311,41 @@ router.get('/:id/versions', authenticate, verifyTenant, async (req, res) => {
 // Desactivar plantilla
 router.delete('/:id', authenticate, verifyTenant, authorize('admin', 'lawyer'), async (req, res) => {
   try {
-    // Verificar que la plantilla pertenece a la empresa del usuario antes de desactivar
-    const template = await ContractTemplate.findOneAndUpdate(
-      {
-        _id: req.params.id,
-        company: req.companyId // Solo desactivar si pertenece a la empresa
-      },
-      { active: false },
-      { new: true }
-    );
+    // Buscar plantilla primero
+    const template = await ContractTemplate.findById(req.params.id);
 
     if (!template) {
-      return res.status(404).json({ error: 'Plantilla no encontrada o no tiene acceso a ella' });
+      return res.status(404).json({ error: 'Plantilla no encontrada' });
     }
+
+    // Verificar permisos
+    if (template.is_shared) {
+      // Solo super_admin puede eliminar plantillas compartidas
+      if (req.user.role !== 'super_admin') {
+        return res.status(403).json({
+          error: 'Solo el super administrador puede eliminar plantillas compartidas'
+        });
+      }
+    } else {
+      // Para plantillas normales, verificar que pertenece a la empresa
+      if (!template.company || template.company.toString() !== req.companyId.toString()) {
+        return res.status(403).json({
+          error: 'No tiene acceso a esta plantilla'
+        });
+      }
+    }
+
+    // Desactivar plantilla
+    template.active = false;
+    await template.save();
 
     await ActivityLog.create({
       user: req.user.id,
       action: 'DELETE',
       entity_type: 'template',
       entity_id: req.params.id,
-      description: 'Desactivó plantilla',
-      company: req.companyId
+      description: `Desactivó plantilla${template.is_shared ? ' compartida' : ''}`,
+      company: template.is_shared ? null : req.companyId
     });
 
     res.json({ message: 'Plantilla desactivada exitosamente' });

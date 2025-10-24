@@ -80,10 +80,18 @@ const contractTemplateSchema = new mongoose.Schema({
     type: Boolean,
     default: true
   },
+  is_shared: {
+    type: Boolean,
+    default: false,
+    description: 'Indica si la plantilla es compartida entre todas las empresas (solo super_admin)'
+  },
   company: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Company',
-    required: true,
+    required: function() {
+      // Company es requerido solo si la plantilla NO es compartida
+      return !this.is_shared;
+    },
     index: true // Índice para mejorar rendimiento de queries por empresa
   },
   created_by: {
