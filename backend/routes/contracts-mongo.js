@@ -31,6 +31,7 @@ router.get('/', authenticate, verifyTenant, async (req, res) => {
     const contracts = await Contract.find(filter)
       .populate('generated_by', 'name email')
       .populate('template', 'name category')
+      .select('contract_number title content description file_path pdf_path status createdAt generated_by template company company_name')
       .sort({ createdAt: -1 });
 
     res.json(contracts);

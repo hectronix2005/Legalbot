@@ -67,6 +67,12 @@ const contractTemplateSchema = new mongoose.Schema({
     type: String,
     enum: ['Laboral', 'Comercial', 'Inmobiliario', 'Legal', 'Servicios', 'Confidencialidad', 'Compraventa', 'Arrendamiento', 'Otro']
   },
+  third_party_type: {
+    type: String,
+    enum: ['proveedor', 'cliente', 'empleado', 'arrendador', 'arrendatario', 'contratista', 'otro'],
+    description: 'Tipo de tercero involucrado en el contrato',
+    default: 'otro'
+  },
   content: {
     type: String,
     default: ''

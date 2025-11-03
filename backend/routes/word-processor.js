@@ -7,10 +7,11 @@ const PizZip = require('pizzip');
 const { Document, Packer, Paragraph, TextRun } = require('docx');
 const path = require('path');
 const fs = require('fs');
-const { authenticate, authorize } = require('../middleware/auth');
+const { authenticate, authorize, verifyTenant } = require('../middleware/auth');
 const ContractTemplate = require('../models/ContractTemplate');
 const Contract = require('../models/Contract');
 const ActivityLog = require('../models/ActivityLog');
+const { suggestFieldType } = require('../config/thirdPartyTypes');
 
 // Configurar multer para subir archivos
 const storage = multer.diskStorage({
@@ -52,8 +53,9 @@ const upload = multer({
 });
 
 // Procesar archivo Word, detectar variables y crear plantilla directamente
-router.post('/detect-variables', 
+router.post('/detect-variables',
   authenticate,
+  verifyTenant,
   authorize('admin', 'lawyer'),
   upload.single('wordFile'),
   async (req, res) => {
@@ -365,7 +367,7 @@ router.post('/upload-word',
         category: 'Confidencialidad',
         content: '',
         fields: parsedVariables,
-        company: req.user.company_id || null,
+        company: req.companyId,
         created_by: req.user.id,
         word_file_path: fileName,
         word_file_original_name: req.file.originalname,
@@ -545,9 +547,10 @@ function detectVariablesFromHtml(html) {
 }
 
 // Función optimizada para detectar variables desde texto plano (sin HTML)
-function detectVariablesFromText(plainText) {
+function detectVariablesFromText(plainText, thirdPartyType = 'otro') {
   console.log('🔍 Analizando texto plano para detectar variables con marcadores {{variable}}...');
   console.log('Texto length:', plainText.length);
+  console.log('🏷️  Tipo de tercero:', thirdPartyType);
 
   const variables = [];
   const foundVariables = new Map();
@@ -576,22 +579,27 @@ function detectVariablesFromText(plainText) {
         // Generar nombre de campo automáticamente
         const autoName = generateAutoFieldName(variableText, variables.length + 1);
 
+        // Sugerir tipo de campo basado en el tipo de tercero
+        const suggestion = suggestFieldType(variableText, thirdPartyType);
+        const fieldType = suggestion.type || detectFieldType(variableText);
+
         variables.push({
           marker: variableText, // MANTENER EXACTO CON ESPACIOS: "RAZON SOCIAL"
           original_marker: variableText, // MANTENER EXACTO CON ESPACIOS
           name: autoName, // field_name normalizado: "razon_social"
           field_name: autoName, // field_name normalizado: "razon_social"
-          field_label: variableText, // Para mostrar al usuario: "RAZON SOCIAL"
-          field_type: detectFieldType(variableText),
-          required: true,
+          field_label: suggestion.label || variableText, // Usar etiqueta sugerida o variable original
+          field_type: fieldType,
+          required: suggestion.required !== undefined ? suggestion.required : true,
           description: `Variable detectada: ${variableText}`,
           needsFieldName: true,
           can_repeat: true,
           repeat_count: 0,
           is_repeated: false,
-          repeat_source: null
+          repeat_source: null,
+          field_options: suggestion.options || []
         });
-        console.log(`✅ Variable agregada: marker="${variableText}" field_name="${autoName}"`);
+        console.log(`✅ Variable agregada: marker="${variableText}" field_name="${autoName}" type="${fieldType}"`);
       }
     }
   }
@@ -950,8 +958,11 @@ router.post('/process-word-with-format',
       }
 
       const filePath = req.file.path;
+      const thirdPartyType = req.body.thirdPartyType || 'otro';
+
       console.log('📄 PROCESANDO WORD CON FORMATO COMPLETO:', req.file.originalname);
       console.log('📁 Ruta del archivo:', filePath);
+      console.log('🏷️  Tipo de tercero:', thirdPartyType);
 
       // IMPORTANTE: Extraer texto plano primero para detectar variables
       console.log('🔍 EXTRAYENDO TEXTO PLANO PARA DETECTAR VARIABLES...');
@@ -971,7 +982,7 @@ router.post('/process-word-with-format',
       }
 
       // Detectar variables desde el texto plano (sin HTML)
-      const variables = detectVariablesFromText(plainText);
+      const variables = detectVariablesFromText(plainText, thirdPartyType);
       console.log('✅ VARIABLES DETECTADAS:', variables.length);
 
       if (variables.length > 0) {
@@ -1041,8 +1052,9 @@ router.post('/process-word-with-format',
 );
 
 // Endpoint para crear plantilla con nombres descriptivos asignados
-router.post('/create-template-with-names', 
+router.post('/create-template-with-names',
   authenticate,
+  verifyTenant,
   authorize('admin', 'lawyer'),
   async (req, res) => {
     try {
@@ -1080,7 +1092,7 @@ router.post('/create-template-with-names',
           repeat_count: variable.repeat_count || 1,
           is_repeated: variable.is_repeated === true || variable.is_repeated === 'true' || false
         })),
-        company: req.user.company_id || null,
+        company: req.companyId,
         created_by: req.user.id,
         version: 1,
         is_current: true,
@@ -1177,6 +1189,7 @@ router.put('/assign-field-names/:id',
 // Endpoint unificado: Crear plantilla y generar contrato en un solo paso
 router.post('/create-template-and-contract',
   authenticate,
+  verifyTenant,
   authorize('admin', 'lawyer'),
   upload.single('wordFile'),
   async (req, res) => {
@@ -1261,7 +1274,7 @@ router.post('/create-template-and-contract',
           repeat_count: variable.repeat_count || 1,
           is_repeated: variable.is_repeated === true || variable.is_repeated === 'true' || false
         })),
-        company: req.user.company_id || null,
+        company: req.companyId,
         created_by: req.user.id,
         word_file_path: req.file.path, // 🔥 RUTA COMPLETA del archivo Word original
         word_file_original_name: req.file.originalname,
@@ -1422,13 +1435,20 @@ router.post('/create-template-and-contract',
         console.log(`  🔄 HTML: Reemplazando {{${marker}}} con "${value}"`);
       }
 
+      // Extraer información del tercero para búsqueda
+      const terceroInfo = extractTerceroInfo(contractDataParsed, template);
+
       // Crear contrato en BD
       const contract = await Contract.create({
         template: template._id,
         contract_number: contractNumber,
+        title: terceroInfo.title || `Contrato ${contractNumber}`,
         content: contractContentHtml, // HTML para preview
+        description: terceroInfo.description || '',
+        company_name: terceroInfo.tercero || '',
         file_path: contractFilePath, // Ruta del contrato Word generado
         generated_by: req.user.id,
+        company: req.companyId, // 🔥 Campo empresa para multi-tenant
         status: 'active'
       });
 
@@ -1502,5 +1522,66 @@ router.post('/create-template-and-contract',
     }
   }
 );
+
+// Función helper para extraer información del tercero desde los datos del contrato
+function extractTerceroInfo(contractData, template) {
+  const info = {
+    tercero: '',
+    title: '',
+    description: ''
+  };
+
+  // Palabras clave comunes para identificar el tercero
+  const terceroKeywords = [
+    'tercero', 'razon_social', 'nombre_tercero', 'empresa_tercero',
+    'nombre_empresa', 'compania', 'proveedor', 'cliente',
+    'contratista', 'arrendatario', 'arrendador', 'parte_contratante'
+  ];
+
+  // Buscar en contractData por campos que contengan información del tercero
+  for (const [key, value] of Object.entries(contractData)) {
+    const keyLower = key.toLowerCase();
+
+    // Si la clave contiene alguna palabra clave de tercero
+    if (terceroKeywords.some(keyword => keyLower.includes(keyword))) {
+      if (value && typeof value === 'string' && value.trim()) {
+        info.tercero = value.trim();
+        info.title = `Contrato con ${value.trim()}`;
+        break;
+      }
+    }
+  }
+
+  // Si no encontró tercero por keywords, buscar en los campos de la plantilla
+  if (!info.tercero && template && template.fields) {
+    for (const field of template.fields) {
+      const fieldName = field.field_name?.toLowerCase() || '';
+      const fieldLabel = field.field_label?.toLowerCase() || '';
+
+      if (terceroKeywords.some(keyword =>
+        fieldName.includes(keyword) || fieldLabel.includes(keyword)
+      )) {
+        const value = contractData[field.field_name];
+        if (value && typeof value === 'string' && value.trim()) {
+          info.tercero = value.trim();
+          info.title = `Contrato con ${value.trim()}`;
+          break;
+        }
+      }
+    }
+  }
+
+  // Crear descripción con todos los datos relevantes
+  const descriptionParts = [];
+  for (const [key, value] of Object.entries(contractData)) {
+    if (value && typeof value === 'string' && value.trim()) {
+      descriptionParts.push(`${key}: ${value.trim()}`);
+    }
+  }
+  info.description = descriptionParts.join('; ');
+
+  console.log('📋 Información del tercero extraída:', info);
+  return info;
+}
 
 module.exports = router;

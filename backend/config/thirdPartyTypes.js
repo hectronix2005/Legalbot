@@ -1,0 +1,193 @@
+/**
+ * Configuración centralizada de tipos de terceros
+ * Esta configuración se usa en todo el sistema para mantener consistencia
+ * Tipos de terceros disponibles en el sistema
+ */
+
+// Lista oficial de tipos de identificación (misma que en Supplier model)
+const IDENTIFICATION_TYPES = ['NIT', 'NIT (PH)', 'CC', 'CE', 'Pasaporte', 'RUT', 'Otro'];
+const IDENTIFICATION_TYPES_PERSON = ['CC', 'CE', 'Pasaporte', 'Otro']; // Para personas naturales
+const IDENTIFICATION_TYPES_REP_LEGAL = ['CC', 'CE', 'Pasaporte']; // Para representantes legales
+
+const THIRD_PARTY_TYPES = {
+  proveedor: {
+    label: 'Proveedor',
+    description: 'Persona o empresa que provee bienes o servicios',
+    icon: '📦',
+    expectedFields: [
+      { name: 'razon_social', label: 'Razón Social / Nombre Completo', type: 'text', required: true },
+      { name: 'razon_social_corta', label: 'Razón Social Abreviada', type: 'text', required: false },
+      { name: 'tipo_identificacion', label: 'Tipo de Identificación', type: 'select', options: IDENTIFICATION_TYPES, required: true },
+      { name: 'numero_identificacion', label: 'Número de Identificación', type: 'text', required: true },
+      { name: 'representante_legal', label: 'Nombre Representante Legal', type: 'text', required: true },
+      { name: 'tipo_id_representante', label: 'Tipo ID Representante Legal', type: 'select', options: IDENTIFICATION_TYPES_REP_LEGAL, required: true },
+      { name: 'numero_id_representante', label: 'Número ID Representante Legal', type: 'text', required: true },
+      { name: 'direccion', label: 'Dirección', type: 'text', required: false },
+      { name: 'ciudad', label: 'Ciudad', type: 'text', required: false },
+      { name: 'pais', label: 'País', type: 'text', required: false },
+      { name: 'email', label: 'Email', type: 'email', required: false },
+      { name: 'telefono', label: 'Teléfono', type: 'text', required: false },
+      { name: 'licenciatario', label: 'Nombre del Licenciatario', type: 'text', required: false } // Para PH
+    ]
+  },
+
+  cliente: {
+    label: 'Cliente',
+    description: 'Persona o empresa que compra bienes o servicios',
+    icon: '👤',
+    expectedFields: [
+      { name: 'razon_social', label: 'Razón Social / Nombre Completo', type: 'text', required: true },
+      { name: 'tipo_identificacion', label: 'Tipo de Identificación', type: 'select', options: IDENTIFICATION_TYPES, required: true },
+      { name: 'numero_identificacion', label: 'Número de Identificación', type: 'text', required: true },
+      { name: 'representante_legal', label: 'Nombre Representante Legal', type: 'text', required: false },
+      { name: 'direccion', label: 'Dirección', type: 'text', required: false },
+      { name: 'ciudad', label: 'Ciudad', type: 'text', required: false },
+      { name: 'pais', label: 'País', type: 'text', required: false },
+      { name: 'email', label: 'Email', type: 'email', required: true },
+      { name: 'telefono', label: 'Teléfono', type: 'text', required: false }
+    ]
+  },
+
+  empleado: {
+    label: 'Empleado',
+    description: 'Persona con relación laboral directa',
+    icon: '👔',
+    expectedFields: [
+      { name: 'nombre_completo', label: 'Nombre Completo', type: 'text', required: true },
+      { name: 'tipo_identificacion', label: 'Tipo de Identificación', type: 'select', options: IDENTIFICATION_TYPES_PERSON, required: true },
+      { name: 'numero_identificacion', label: 'Número de Identificación', type: 'text', required: true },
+      { name: 'fecha_nacimiento', label: 'Fecha de Nacimiento', type: 'date', required: false },
+      { name: 'cargo', label: 'Cargo', type: 'text', required: true },
+      { name: 'direccion', label: 'Dirección de Residencia', type: 'text', required: true },
+      { name: 'ciudad', label: 'Ciudad', type: 'text', required: true },
+      { name: 'email', label: 'Email', type: 'email', required: true },
+      { name: 'telefono', label: 'Teléfono', type: 'text', required: true },
+      { name: 'eps', label: 'EPS', type: 'text', required: false },
+      { name: 'afp', label: 'AFP / Fondo de Pensiones', type: 'text', required: false },
+      { name: 'salario', label: 'Salario', type: 'number', required: false }
+    ]
+  },
+
+  arrendador: {
+    label: 'Arrendador',
+    description: 'Propietario del inmueble o bien en arrendamiento',
+    icon: '🏠',
+    expectedFields: [
+      { name: 'nombre_completo', label: 'Nombre Completo / Razón Social', type: 'text', required: true },
+      { name: 'tipo_identificacion', label: 'Tipo de Identificación', type: 'select', options: IDENTIFICATION_TYPES, required: true },
+      { name: 'numero_identificacion', label: 'Número de Identificación', type: 'text', required: true },
+      { name: 'direccion', label: 'Dirección', type: 'text', required: true },
+      { name: 'ciudad', label: 'Ciudad', type: 'text', required: true },
+      { name: 'email', label: 'Email', type: 'email', required: true },
+      { name: 'telefono', label: 'Teléfono', type: 'text', required: true },
+      { name: 'banco', label: 'Banco', type: 'text', required: false },
+      { name: 'cuenta_bancaria', label: 'Número de Cuenta Bancaria', type: 'text', required: false },
+      { name: 'tipo_cuenta', label: 'Tipo de Cuenta', type: 'select', options: ['Ahorros', 'Corriente'], required: false }
+    ]
+  },
+
+  arrendatario: {
+    label: 'Arrendatario',
+    description: 'Persona que toma en arriendo un inmueble o bien',
+    icon: '🔑',
+    expectedFields: [
+      { name: 'nombre_completo', label: 'Nombre Completo / Razón Social', type: 'text', required: true },
+      { name: 'tipo_identificacion', label: 'Tipo de Identificación', type: 'select', options: IDENTIFICATION_TYPES, required: true },
+      { name: 'numero_identificacion', label: 'Número de Identificación', type: 'text', required: true },
+      { name: 'direccion_actual', label: 'Dirección Actual', type: 'text', required: true },
+      { name: 'ciudad', label: 'Ciudad', type: 'text', required: true },
+      { name: 'email', label: 'Email', type: 'email', required: true },
+      { name: 'telefono', label: 'Teléfono', type: 'text', required: true },
+      { name: 'ocupacion', label: 'Ocupación', type: 'text', required: false },
+      { name: 'empresa_trabajo', label: 'Empresa donde Trabaja', type: 'text', required: false },
+      { name: 'referencias', label: 'Referencias Personales', type: 'textarea', required: false }
+    ]
+  },
+
+  contratista: {
+    label: 'Contratista',
+    description: 'Persona natural que presta servicios profesionales de forma independiente',
+    icon: '💼',
+    expectedFields: [
+      { name: 'nombre_completo', label: 'Nombre Completo', type: 'text', required: true },
+      { name: 'tipo_identificacion', label: 'Tipo de Identificación', type: 'select', options: IDENTIFICATION_TYPES_PERSON, required: true },
+      { name: 'numero_identificacion', label: 'Número de Identificación', type: 'text', required: true },
+      { name: 'profesion', label: 'Profesión u Oficio', type: 'text', required: true },
+      { name: 'direccion', label: 'Dirección', type: 'text', required: true },
+      { name: 'ciudad', label: 'Ciudad', type: 'text', required: true },
+      { name: 'email', label: 'Email', type: 'email', required: true },
+      { name: 'telefono', label: 'Teléfono', type: 'text', required: true },
+      { name: 'rut', label: 'RUT', type: 'text', required: false },
+      { name: 'eps', label: 'EPS', type: 'text', required: false },
+      { name: 'arl', label: 'ARL', type: 'text', required: false }
+    ]
+  },
+
+  otro: {
+    label: 'Otro',
+    description: 'Tipo de tercero genérico o no especificado',
+    icon: '📄',
+    expectedFields: [
+      { name: 'nombre', label: 'Nombre / Razón Social', type: 'text', required: true },
+      { name: 'tipo_identificacion', label: 'Tipo de Identificación', type: 'select', options: IDENTIFICATION_TYPES, required: true },
+      { name: 'identificacion', label: 'Número de Identificación', type: 'text', required: true },
+      { name: 'direccion', label: 'Dirección', type: 'text', required: false },
+      { name: 'email', label: 'Email', type: 'email', required: false },
+      { name: 'telefono', label: 'Teléfono', type: 'text', required: false }
+    ]
+  }
+};
+
+/**
+ * Obtiene la configuración de un tipo de tercero
+ */
+function getThirdPartyConfig(type) {
+  return THIRD_PARTY_TYPES[type] || THIRD_PARTY_TYPES.otro;
+}
+
+/**
+ * Obtiene todos los tipos de terceros disponibles
+ */
+function getAllThirdPartyTypes() {
+  return Object.keys(THIRD_PARTY_TYPES).map(key => ({
+    value: key,
+    label: THIRD_PARTY_TYPES[key].label,
+    description: THIRD_PARTY_TYPES[key].description,
+    icon: THIRD_PARTY_TYPES[key].icon
+  }));
+}
+
+/**
+ * Sugiere un tipo de campo basado en el nombre de la variable detectada
+ */
+function suggestFieldType(fieldName, thirdPartyType) {
+  const config = getThirdPartyConfig(thirdPartyType);
+  const normalizedFieldName = fieldName.toLowerCase().replace(/[_\s]/g, '');
+
+  // Buscar coincidencia en los campos esperados
+  for (const expectedField of config.expectedFields) {
+    const normalizedExpectedName = expectedField.name.toLowerCase().replace(/[_\s]/g, '');
+    if (normalizedFieldName.includes(normalizedExpectedName) || normalizedExpectedName.includes(normalizedFieldName)) {
+      return expectedField;
+    }
+  }
+
+  // Sugerencias genéricas basadas en patrones comunes
+  if (/(fecha|date|inicio|fin|termino)/i.test(fieldName)) return { type: 'date' };
+  if (/(email|correo|mail)/i.test(fieldName)) return { type: 'email' };
+  if (/(telefono|phone|celular|movil)/i.test(fieldName)) return { type: 'text' };
+  if (/(numero|cantidad|valor|precio|salario|monto)/i.test(fieldName)) return { type: 'number' };
+  if (/(descripcion|observaciones|notas|comentarios)/i.test(fieldName)) return { type: 'textarea' };
+
+  return { type: 'text' }; // Por defecto
+}
+
+module.exports = {
+  THIRD_PARTY_TYPES,
+  IDENTIFICATION_TYPES,
+  IDENTIFICATION_TYPES_PERSON,
+  IDENTIFICATION_TYPES_REP_LEGAL,
+  getThirdPartyConfig,
+  getAllThirdPartyTypes,
+  suggestFieldType
+};

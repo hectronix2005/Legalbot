@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { authenticate } = require('../middleware/auth');
+const { authenticate, verifyTenant } = require('../middleware/auth');
 const Company = require('../models/Company');
 const User = require('../models/User');
 const ContractTemplate = require('../models/ContractTemplate');
@@ -9,53 +9,75 @@ const Contract = require('../models/Contract');
 const ActivityLog = require('../models/ActivityLog');
 
 // Obtener estadísticas
-router.get('/stats', authenticate, async (req, res) => {
+router.get('/stats', authenticate, verifyTenant, async (req, res) => {
   try {
     const stats = {};
 
     if (req.user.role === 'admin' || req.user.role === 'super_admin') {
+      // Filtrar por empresa si se ha seleccionado una
+      const companyFilter = req.companyId ? { company: req.companyId } : {};
+      const templateFilter = req.companyId
+        ? { active: true, $or: [{ company: req.companyId }, { is_shared: true }] }
+        : { active: true };
+
       stats.totalCompanies = await Company.countDocuments({ active: true });
       stats.totalUsers = await User.countDocuments({ active: true });
-      stats.totalTemplates = await ContractTemplate.countDocuments({ active: true });
-      stats.totalRequests = await ContractRequest.countDocuments();
-      stats.totalContracts = await Contract.countDocuments();
+      stats.totalTemplates = await ContractTemplate.countDocuments(templateFilter);
+      stats.totalRequests = await ContractRequest.countDocuments(companyFilter);
+      stats.totalContracts = await Contract.countDocuments(companyFilter);
 
-      // Solicitudes por estado
-      const requestsByStatus = await ContractRequest.aggregate([
-        { $group: { _id: '$status', count: { $sum: 1 } } }
-      ]);
+      // Solicitudes por estado (filtrado por empresa si aplica)
+      const aggregatePipeline = [];
+      if (req.companyId) {
+        aggregatePipeline.push({ $match: { company: req.companyId } });
+      }
+      aggregatePipeline.push({ $group: { _id: '$status', count: { $sum: 1 } } });
+
+      const requestsByStatus = await ContractRequest.aggregate(aggregatePipeline);
       stats.requestsByStatus = requestsByStatus.map(r => ({
         status: r._id,
         count: r.count
       }));
 
     } else if (req.user.role === 'lawyer') {
-      stats.assignedRequests = await ContractRequest.countDocuments({ assigned_lawyer: req.user.id });
-      stats.pendingReview = await ContractRequest.countDocuments({ 
-        assigned_lawyer: req.user.id, 
-        status: 'in_review' 
-      });
-      stats.contractsGenerated = await Contract.countDocuments({ generated_by: req.user.id });
-      stats.unassignedRequests = await ContractRequest.countDocuments({ 
-        assigned_lawyer: null, 
-        status: 'pending' 
+      const lawyerFilter = { assigned_lawyer: req.user.id };
+      if (req.companyId) lawyerFilter.company = req.companyId;
+
+      stats.assignedRequests = await ContractRequest.countDocuments(lawyerFilter);
+      stats.pendingReview = await ContractRequest.countDocuments({
+        ...lawyerFilter,
+        status: 'in_review'
       });
 
+      const contractFilter = { generated_by: req.user.id };
+      if (req.companyId) contractFilter.company = req.companyId;
+      stats.contractsGenerated = await Contract.countDocuments(contractFilter);
+
+      const unassignedFilter = {
+        assigned_lawyer: null,
+        status: 'pending'
+      };
+      if (req.companyId) unassignedFilter.company = req.companyId;
+      stats.unassignedRequests = await ContractRequest.countDocuments(unassignedFilter);
+
     } else if (req.user.role === 'requester') {
-      stats.myRequests = await ContractRequest.countDocuments({ requester: req.user.id });
-      stats.pendingRequests = await ContractRequest.countDocuments({ 
-        requester: req.user.id, 
-        status: 'pending' 
+      const requesterFilter = { requester: req.user.id };
+      if (req.companyId) requesterFilter.company = req.companyId;
+
+      stats.myRequests = await ContractRequest.countDocuments(requesterFilter);
+      stats.pendingRequests = await ContractRequest.countDocuments({
+        ...requesterFilter,
+        status: 'pending'
       });
-      stats.approvedRequests = await ContractRequest.countDocuments({ 
-        requester: req.user.id, 
-        status: 'approved' 
+      stats.approvedRequests = await ContractRequest.countDocuments({
+        ...requesterFilter,
+        status: 'approved'
       });
-      
-      const myRequestIds = await ContractRequest.find({ requester: req.user.id }).select('_id');
-      stats.myContracts = await Contract.countDocuments({ 
-        request: { $in: myRequestIds.map(r => r._id) } 
-      });
+
+      const myRequestIds = await ContractRequest.find(requesterFilter).select('_id');
+      const contractFilter = { request: { $in: myRequestIds.map(r => r._id) } };
+      if (req.companyId) contractFilter.company = req.companyId;
+      stats.myContracts = await Contract.countDocuments(contractFilter);
     }
 
     res.json(stats);
@@ -69,11 +91,16 @@ router.get('/stats', authenticate, async (req, res) => {
 router.get('/activity', authenticate, async (req, res) => {
   try {
     const limit = parseInt(req.query.limit) || 10;
-    
+
     const filter = {};
+
+    // Requester solo ve su propia actividad
     if (req.user.role === 'requester') {
       filter.user = req.user.id;
     }
+
+    // Nota: ActivityLog no tiene campo company, por lo que no se puede filtrar por empresa
+    // Para filtrar por empresa, se necesitaría agregar el campo company al modelo ActivityLog
 
     const activity = await ActivityLog.find(filter)
       .populate('user', 'name')

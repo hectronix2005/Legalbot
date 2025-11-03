@@ -4,8 +4,9 @@ require('dotenv').config();
 const authenticate = (req, res, next) => {
   try {
     const token = req.headers.authorization?.split(' ')[1];
-    
+
     if (!token) {
+      console.log('❌ authenticate: Token no proporcionado para ruta:', req.path);
       return res.status(401).json({ error: 'Token no proporcionado' });
     }
 
@@ -13,6 +14,7 @@ const authenticate = (req, res, next) => {
     req.user = decoded;
     next();
   } catch (error) {
+    console.log('❌ authenticate: Token inválido o expirado para ruta:', req.path, 'Error:', error.message);
     return res.status(401).json({ error: 'Token inválido o expirado' });
   }
 };

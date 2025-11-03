@@ -3,13 +3,27 @@ const cors = require('cors');
 const path = require('path');
 require('dotenv').config();
 const connectDB = require('./config/mongodb');
-const { dataProtectionMiddleware, verifyDataIntegrity, createAutomaticBackup } = require('./middleware/dataProtection');
+const { dataProtectionMiddleware } = require('./middleware/dataProtection');
+const {
+  createFullBackup,
+  cleanOldBackups,
+  verifyDataIntegrity,
+  promoteToWeekly
+} = require('./services/robustBackup');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
 
+// Variable para rastrear conexión
+let mongoConnected = false;
+
 // Conectar a MongoDB
-connectDB();
+connectDB().then(() => {
+  mongoConnected = true;
+  console.log('✅ MongoDB listo para backups');
+}).catch(error => {
+  console.error('Error conectando a MongoDB:', error);
+});
 
 // Middleware
 app.use(cors());
@@ -46,6 +60,8 @@ const companyUsersRoutes = require('./routes/company-users');
 const wordProcessorRoutes = require('./routes/word-processor');
 const contractGeneratorRoutes = require('./routes/contract-generator');
 const documentManagementRoutes = require('./routes/document-management');
+const supplierRoutes = require('./routes/suppliers');
+const thirdPartyTypesConfigRoutes = require('./routes/third-party-types-config');
 
 // Usar rutas
 app.use('/api/auth', authRoutes);
@@ -61,6 +77,8 @@ app.use('/api/company-users', companyUsersRoutes);
 app.use('/api/templates', wordProcessorRoutes);
 app.use('/api/contract-generator', contractGeneratorRoutes);
 app.use('/api/documents', documentManagementRoutes);
+app.use('/api/suppliers', supplierRoutes);
+app.use('/api/third-party-types', thirdPartyTypesConfigRoutes);
 
 // Ruta de prueba
 app.get('/api/health', (req, res) => {
@@ -82,22 +100,108 @@ app.use((err, req, res, next) => {
   res.status(500).json({ error: 'Error interno del servidor' });
 });
 
-// Verificar integridad de datos al iniciar
+// Variables para control de backups
+let backupInterval = null;
+let weeklyBackupInterval = null;
+
+// Sistema robusto de protección de datos
 const initializeDataProtection = async () => {
   try {
-    console.log('🔍 Verificando integridad de datos...');
-    const isHealthy = await verifyDataIntegrity();
-    
-    if (!isHealthy) {
-      console.log('⚠️  Creando respaldo de emergencia...');
-      await createAutomaticBackup();
+    // Esperar a que MongoDB esté conectado
+    let attempts = 0;
+    while (!mongoConnected && attempts < 30) {
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      attempts++;
     }
-    
-    console.log('✅ Protección de datos inicializada');
+
+    if (!mongoConnected) {
+      console.error('❌ MongoDB no conectado después de 30 segundos, omitiendo protección de datos');
+      return;
+    }
+
+    console.log('🔍 Verificando integridad de datos...');
+    const integrity = await verifyDataIntegrity();
+
+    if (!integrity.healthy) {
+      console.warn('⚠️  Advertencias de integridad:');
+      integrity.warnings.forEach(w => console.warn(`   ${w}`));
+    } else {
+      console.log('✅ Integridad de datos verificada');
+    }
+
+    console.log('📊 Estado actual:');
+    Object.entries(integrity.stats || {}).forEach(([coll, count]) => {
+      console.log(`   - ${coll}: ${count} documentos`);
+    });
+
+    // Crear backup inicial
+    console.log('\n📦 Creando backup inicial...');
+    await createFullBackup('STARTUP');
+
+    // Limpiar backups antiguos
+    console.log('\n🧹 Limpiando backups antiguos...');
+    await cleanOldBackups();
+
+    // Programar backups cada hora
+    console.log('\n⏰ Programando backups automáticos cada hora...');
+    backupInterval = setInterval(async () => {
+      try {
+        console.log('\n⏰ Ejecutando backup automático horario...');
+        await createFullBackup('HOURLY');
+        await cleanOldBackups();
+      } catch (error) {
+        console.error('❌ Error en backup automático:', error);
+      }
+    }, 60 * 60 * 1000); // Cada hora
+
+    // Programar backup semanal (domingos a las 3 AM)
+    console.log('⏰ Programando backups semanales...');
+    weeklyBackupInterval = setInterval(async () => {
+      const now = new Date();
+      // Si es domingo (0) a las 3 AM
+      if (now.getDay() === 0 && now.getHours() === 3) {
+        try {
+          console.log('\n📅 Creando backup semanal...');
+          await promoteToWeekly();
+          await cleanOldBackups();
+        } catch (error) {
+          console.error('❌ Error en backup semanal:', error);
+        }
+      }
+    }, 60 * 60 * 1000); // Revisar cada hora
+
+    console.log('✅ Sistema de protección de datos inicializado');
   } catch (error) {
     console.error('❌ Error inicializando protección de datos:', error);
   }
 };
+
+// Limpieza al cerrar el servidor
+process.on('SIGTERM', async () => {
+  console.log('\n⚠️  Señal SIGTERM recibida, cerrando servidor...');
+  if (backupInterval) clearInterval(backupInterval);
+  if (weeklyBackupInterval) clearInterval(weeklyBackupInterval);
+  console.log('📦 Creando backup final...');
+  try {
+    await createFullBackup('SHUTDOWN');
+  } catch (error) {
+    console.error('Error creando backup final:', error);
+  }
+  process.exit(0);
+});
+
+process.on('SIGINT', async () => {
+  console.log('\n⚠️  Señal SIGINT recibida, cerrando servidor...');
+  if (backupInterval) clearInterval(backupInterval);
+  if (weeklyBackupInterval) clearInterval(weeklyBackupInterval);
+  console.log('📦 Creando backup final...');
+  try {
+    await createFullBackup('SHUTDOWN');
+  } catch (error) {
+    console.error('Error creando backup final:', error);
+  }
+  process.exit(0);
+});
 
 // Iniciar servidor
 app.listen(PORT, async () => {

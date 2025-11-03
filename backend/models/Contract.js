@@ -22,7 +22,7 @@ const contractSchema = new mongoose.Schema({
   },
   content: {
     type: String,
-    required: true
+    required: false // Opcional - ahora trabajamos con archivos Word
   },
   description: {
     type: String,
