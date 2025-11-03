@@ -80,18 +80,41 @@ app.use('/api/documents', documentManagementRoutes);
 app.use('/api/suppliers', supplierRoutes);
 app.use('/api/third-party-types', thirdPartyTypesConfigRoutes);
 
+// Ruta raíz - Información de la API
+app.get('/', (req, res) => {
+  res.json({
+    name: 'Legal Bot API',
+    version: '1.0.0',
+    status: 'running',
+    environment: process.env.NODE_ENV || 'development',
+    endpoints: {
+      health: '/api/health',
+      auth: '/api/auth',
+      contracts: '/api/contracts',
+      templates: '/api/templates',
+      dashboard: '/api/dashboard',
+      users: '/api/users',
+      companies: '/api/companies'
+    },
+    documentation: 'Para más información, contacta al administrador'
+  });
+});
+
 // Ruta de prueba
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', message: 'API de contratos funcionando correctamente' });
 });
 
-// Servir archivos estáticos del frontend en producción
+// Servir archivos estáticos del frontend en producción (solo si existe el directorio)
 if (process.env.NODE_ENV === 'production') {
-  app.use(express.static(path.join(__dirname, '../frontend/dist')));
-  
-  app.get('*', (req, res) => {
-    res.sendFile(path.join(__dirname, '../frontend/dist/index.html'));
-  });
+  const frontendPath = path.join(__dirname, '../frontend/dist');
+  if (fs.existsSync(frontendPath)) {
+    app.use(express.static(frontendPath));
+
+    app.get('*', (req, res) => {
+      res.sendFile(path.join(frontendPath, 'index.html'));
+    });
+  }
 }
 
 // Manejo de errores
