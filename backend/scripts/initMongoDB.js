@@ -16,6 +16,26 @@ async function initMongoDB() {
     await mongoose.connect(MONGODB_URI);
     console.log('✅ Conectado a MongoDB');
 
+    // PROTECCIÓN: NUNCA borrar datos en producción
+    if (process.env.NODE_ENV === 'production') {
+      console.error('❌ ERROR: Este script NO puede ejecutarse en producción');
+      console.error('❌ Esto borraría TODOS los datos de producción');
+      console.error('❌ Si necesitas inicializar la base de datos de producción, usa un script específico');
+      process.exit(1);
+    }
+
+    // Verificar que hay pocos datos antes de borrar (protección adicional)
+    const userCount = await User.countDocuments();
+    const templateCount = await ContractTemplate.countDocuments();
+
+    if (userCount > 10 || templateCount > 5) {
+      console.error('❌ ERROR: La base de datos tiene muchos datos');
+      console.error(`❌ Usuarios: ${userCount}, Templates: ${templateCount}`);
+      console.error('❌ No se borrarán datos por seguridad');
+      console.error('❌ Si realmente quieres borrar, hazlo manualmente');
+      process.exit(1);
+    }
+
     // Limpiar datos existentes (opcional - comentar si quieres mantener datos)
     console.log('🗑️  Limpiando datos antiguos...');
     await Promise.all([
