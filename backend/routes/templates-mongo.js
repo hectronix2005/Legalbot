@@ -102,7 +102,7 @@ router.get('/', authenticate, verifyTenant, async (req, res) => {
 router.post('/upload-word',
   authenticate,
   verifyTenant,
-  authorize('admin', 'lawyer'),
+  authorize('super_admin', 'admin', 'lawyer'),
   upload.single('wordFile'),
   async (req, res) => {
     try {
@@ -203,7 +203,7 @@ router.get('/:id/download-word', authenticate, verifyTenant, async (req, res) =>
 router.post('/:id/replace-word',
   authenticate,
   verifyTenant,
-  authorize('admin', 'lawyer'),
+  authorize('super_admin', 'admin', 'lawyer'),
   upload.single('wordFile'),
   async (req, res) => {
     try {
@@ -278,7 +278,7 @@ router.post('/:id/replace-word',
 router.post('/:id/generate-contract',
   authenticate,
   verifyTenant,
-  authorize('admin', 'lawyer'),
+  authorize('super_admin', 'admin', 'lawyer'),
   async (req, res) => {
     try {
       const { contractData } = req.body;
@@ -412,7 +412,7 @@ router.post('/:id/generate-contract',
 );
 
 // Copiar plantilla (duplicar)
-router.post('/:id/copy', authenticate, verifyTenant, authorize('admin', 'lawyer'), async (req, res) => {
+router.post('/:id/copy', authenticate, verifyTenant, authorize('super_admin', 'admin', 'lawyer'), async (req, res) => {
   try {
     const { newName } = req.body;
 
@@ -505,7 +505,7 @@ router.post('/:id/copy', authenticate, verifyTenant, authorize('admin', 'lawyer'
 router.post('/',
   authenticate,
   verifyTenant,
-  authorize('admin', 'lawyer'),
+  authorize('super_admin', 'admin', 'lawyer'),
   [
     body('name').notEmpty().withMessage('El nombre es requerido')
   ],
@@ -585,7 +585,7 @@ router.post('/',
 router.put('/:id',
   authenticate,
   verifyTenant,
-  authorize('admin', 'lawyer'),
+  authorize('super_admin', 'admin', 'lawyer'),
   async (req, res) => {
     try {
       const { content, changes_description, fields, name, description, category } = req.body;
@@ -693,7 +693,7 @@ router.get('/:id/versions', authenticate, verifyTenant, async (req, res) => {
 });
 
 // Desactivar plantilla
-router.delete('/:id', authenticate, verifyTenant, authorize('admin', 'lawyer'), async (req, res) => {
+router.delete('/:id', authenticate, verifyTenant, authorize('super_admin', 'admin', 'lawyer'), async (req, res) => {
   try {
     // Buscar plantilla primero
     const template = await ContractTemplate.findById(req.params.id);
