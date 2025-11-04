@@ -128,12 +128,23 @@ app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', message: 'API de contratos funcionando correctamente' });
 });
 
-// Servir archivos estáticos del frontend (desarrollo y producción)
-const frontendPath = process.env.NODE_ENV === 'production'
-  ? path.join(__dirname, '../frontend/dist')
-  : path.join(__dirname, '../frontend/build');
+// Servir archivos estáticos del frontend
+// Primero intentar con public (para producción/Heroku), luego con ../frontend/build (desarrollo)
+const possibleFrontendPaths = [
+  path.join(__dirname, 'public'),
+  path.join(__dirname, '../frontend/build'),
+  path.join(__dirname, '../frontend/dist')
+];
 
-if (fs.existsSync(frontendPath)) {
+let frontendPath = null;
+for (const possiblePath of possibleFrontendPaths) {
+  if (fs.existsSync(possiblePath)) {
+    frontendPath = possiblePath;
+    break;
+  }
+}
+
+if (frontendPath) {
   console.log(`📁 Sirviendo frontend desde: ${frontendPath}`);
   app.use(express.static(frontendPath));
 
@@ -146,7 +157,8 @@ if (fs.existsSync(frontendPath)) {
     res.sendFile(path.join(frontendPath, 'index.html'));
   });
 } else {
-  console.log('⚠️  Frontend build no encontrado. Ejecuta "npm run build" en la carpeta frontend');
+  console.log('⚠️  Frontend build no encontrado en ninguna ubicación esperada');
+  console.log('   Ubicaciones buscadas:', possibleFrontendPaths);
 }
 
 // Manejo de errores
