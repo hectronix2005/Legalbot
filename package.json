@@ -9,7 +9,7 @@
     "dev:frontend": "cd frontend && npm run dev",
     "build": "echo 'Frontend already built'",
     "start": "cd backend && npm start",
-    "heroku-postbuild": "echo 'Skipping frontend build - using pre-built version'"
+    "heroku-postbuild": "cd backend && npm install --omit=dev && echo 'Backend dependencies installed'"
   },
   "keywords": [
     "legal",
