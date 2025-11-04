@@ -19,10 +19,16 @@ router.get('/', authenticate, async (req, res) => {
       ];
     }
 
+    console.log('🔍 [DEBUG /third-party-types] Fetching types with filter:', JSON.stringify(filter));
+    console.log('🔍 [DEBUG /third-party-types] User role:', req.user.role, 'CompanyId:', req.companyId);
+
     const types = await ThirdPartyTypeConfig.find(filter)
       .populate('created_by', 'name email')
       .populate('company', 'name')
       .sort({ code: 1 });
+
+    console.log('✅ [DEBUG /third-party-types] Types found:', types.length);
+    console.log('📋 [DEBUG /third-party-types] Type codes:', types.map(t => t.code).join(', '));
 
     res.json(types);
   } catch (error) {

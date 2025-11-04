@@ -10,6 +10,7 @@ const ContractTemplate = require('../models/ContractTemplate');
 const VersionHistory = require('../models/VersionHistory');
 const ActivityLog = require('../models/ActivityLog');
 const { getAllThirdPartyTypes, getThirdPartyConfig } = require('../config/thirdPartyTypes');
+const ThirdPartyTypeConfig = require('../models/ThirdPartyTypeConfig');
 
 // Configurar multer
 const storage = multer.diskStorage({
@@ -40,11 +41,39 @@ const upload = multer({
   }
 });
 
-// Obtener tipos de terceros disponibles
-router.get('/third-party-types', authenticate, (req, res) => {
+// Obtener tipos de terceros disponibles (ahora desde la base de datos, no solo los hardcodeados)
+router.get('/third-party-types', authenticate, async (req, res) => {
   try {
-    const types = getAllThirdPartyTypes();
-    res.json(types);
+    const filter = { active: true };
+
+    // Super admin ve todos, otros usuarios ven solo los de su empresa o globales
+    if (req.user.role !== 'super_admin' && req.companyId) {
+      filter.$or = [
+        { company: req.companyId },
+        { company: null } // Tipos globales
+      ];
+    }
+
+    console.log('🔍 [DEBUG /templates/third-party-types] Fetching types with filter:', JSON.stringify(filter));
+    console.log('🔍 [DEBUG /templates/third-party-types] User role:', req.user.role, 'CompanyId:', req.companyId);
+
+    const types = await ThirdPartyTypeConfig.find(filter)
+      .select('code label icon description fields')
+      .sort({ label: 1 })
+      .lean();
+
+    console.log('✅ [DEBUG /templates/third-party-types] Types found:', types.length);
+    console.log('📋 [DEBUG /templates/third-party-types] Type codes:', types.map(t => t.code).join(', '));
+
+    // Formatear para coincidir con el formato esperado por el frontend
+    const formattedTypes = types.map(t => ({
+      value: t.code,
+      label: t.label,
+      description: t.description || '',
+      icon: t.icon || '📄'
+    }));
+
+    res.json(formattedTypes);
   } catch (error) {
     console.error('Error al obtener tipos de terceros:', error);
     res.status(500).json({ error: 'Error al obtener tipos de terceros' });

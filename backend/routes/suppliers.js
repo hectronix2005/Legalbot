@@ -21,9 +21,15 @@ router.get('/types', authenticate, async (req, res) => {
       ];
     }
 
+    console.log('🔍 [DEBUG] Fetching types with filter:', JSON.stringify(filter));
+    console.log('🔍 [DEBUG] User role:', req.user.role, 'CompanyId:', req.companyId);
+
     const types = await ThirdPartyTypeConfig.find(filter)
       .select('code label icon description fields default_identification_types')
       .sort({ label: 1 });
+
+    console.log('✅ [DEBUG] Types found:', types.length);
+    console.log('📋 [DEBUG] Type codes:', types.map(t => t.code).join(', '));
 
     res.json({
       success: true,
