@@ -18,12 +18,13 @@ const WEEKLY_RETENTION = 12; // 12 semanas de backups semanales
 
 // Colecciones críticas a respaldar
 const CRITICAL_COLLECTIONS = [
-  'templates',
+  'contracttemplates',
   'contracts',
   'companies',
   'users',
   'suppliers',
-  'thirdpartytypeconfigs'
+  'thirdpartytypeconfigs',
+  'usercompanies'
 ];
 
 /**

@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const User = require('../models/User');
 const Company = require('../models/Company');
+const UserCompany = require('../models/UserCompany');
 const { body, validationResult } = require('express-validator');
 const { authenticate, requireSuperAdmin } = require('../middleware/auth');
 
@@ -104,9 +105,8 @@ router.post('/remove-user-company',
         return res.status(404).json({ error: 'Usuario no encontrado' });
       }
 
-      // Remover empresa del usuario
-      user.company = null;
-      await user.save();
+      // Remover relaciones UserCompany del usuario
+      await UserCompany.deleteMany({ user: userId, company: companyId });
 
       res.json({
         message: 'Usuario removido de empresa exitosamente',
@@ -163,18 +163,31 @@ router.post('/create-user',
       const bcrypt = require('bcryptjs');
       const hashedPassword = await bcrypt.hash(password, 10);
 
-      // Crear usuario
+      // Crear usuario (sin campo company, ahora se maneja con UserCompany)
       const user = await User.create({
         email,
         password: hashedPassword,
         name,
-        role,
-        company: companyId || null
+        role
       });
 
-      // Poblar la empresa si existe
+      // Si se proporciona companyId, crear relación en UserCompany
+      let companyInfo = null;
       if (companyId) {
-        await user.populate('company', 'name tax_id');
+        const company = await Company.findById(companyId);
+        if (company) {
+          await UserCompany.create({
+            user: user._id,
+            company: companyId,
+            role: role,
+            assignedBy: req.user.id
+          });
+          companyInfo = {
+            id: company._id,
+            name: company.name,
+            tax_id: company.tax_id
+          };
+        }
       }
 
       res.status(201).json({
@@ -184,7 +197,7 @@ router.post('/create-user',
           email: user.email,
           name: user.name,
           role: user.role,
-          company: user.company
+          company: companyInfo
         }
       });
     } catch (error) {

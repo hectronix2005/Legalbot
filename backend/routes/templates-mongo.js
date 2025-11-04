@@ -67,14 +67,16 @@ router.get('/', authenticate, verifyTenant, async (req, res) => {
   try {
     const { category, is_current } = req.query;
 
-    // Filtrar por plantillas de la empresa O plantillas compartidas
-    const filter = {
-      active: true,
-      $or: [
+    // Si companyId es "ALL", mostrar todas las plantillas activas
+    // Si no, filtrar por plantillas de la empresa O plantillas compartidas
+    const filter = { active: true };
+
+    if (req.companyId && req.companyId !== 'ALL') {
+      filter.$or = [
         { company: req.companyId },      // Plantillas de la empresa
         { is_shared: true }              // Plantillas compartidas (super_admin)
-      ]
-    };
+      ];
+    }
 
     if (category) {
       filter.category = category;
@@ -797,6 +799,184 @@ function extractTerceroInfo(contractData, template) {
   console.log('📋 Información del tercero extraída:', info);
   return info;
 }
+
+// ========================================
+// ENDPOINTS PARA GESTIÓN DE PERMISOS Y COMPARTICIÓN
+// ========================================
+
+// Copiar una plantilla (super_admin puede convertir plantilla de empresa en general)
+router.post('/:id/copy', authenticate, verifyTenant, authorize('super_admin'), async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { makeShared, targetCompanyIds, newName } = req.body;
+
+    // Buscar la plantilla original
+    const originalTemplate = await ContractTemplate.findById(id)
+      .populate('company', 'name')
+      .populate('created_by', 'name email');
+
+    if (!originalTemplate) {
+      return res.status(404).json({ error: 'Plantilla no encontrada' });
+    }
+
+    // Crear copia de la plantilla
+    const templateCopy = {
+      name: newName || `${originalTemplate.name} (Copia)`,
+      description: originalTemplate.description,
+      category: originalTemplate.category,
+      third_party_type: originalTemplate.third_party_type,
+      content: originalTemplate.content,
+      fields: originalTemplate.fields,
+      version: 1,
+      is_current: true,
+      is_shared: makeShared || false,
+      shared_with_companies: (!makeShared && targetCompanyIds) ? targetCompanyIds : [],
+      company: makeShared ? null : req.companyId,
+      created_by: req.user.id,
+      can_edit_roles: makeShared ? ['super_admin'] : ['super_admin', 'admin', 'lawyer'],
+      is_copy: true,
+      copied_from: originalTemplate._id,
+      active: true
+    };
+
+    const newTemplate = await ContractTemplate.create(templateCopy);
+
+    await ActivityLog.create({
+      user: req.user.id,
+      action: 'COPY_TEMPLATE',
+      entity_type: 'template',
+      entity_id: newTemplate._id,
+      description: `Copió la plantilla "${originalTemplate.name}" como "${newTemplate.name}"${makeShared ? ' (compartida con todas las empresas)' : ''}`,
+      company: req.companyId
+    });
+
+    res.status(201).json({
+      success: true,
+      message: 'Plantilla copiada exitosamente',
+      template: newTemplate
+    });
+  } catch (error) {
+    console.error('Error al copiar plantilla:', error);
+    res.status(500).json({ error: 'Error al copiar plantilla' });
+  }
+});
+
+// Actualizar configuración de compartición de una plantilla
+router.put('/:id/sharing', authenticate, verifyTenant, authorize('super_admin'), async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { is_shared, shared_with_companies } = req.body;
+
+    const template = await ContractTemplate.findById(id);
+
+    if (!template) {
+      return res.status(404).json({ error: 'Plantilla no encontrada' });
+    }
+
+    // Solo super_admin puede modificar configuración de compartición
+    if (req.user.role !== 'super_admin') {
+      return res.status(403).json({
+        error: 'Solo super_admin puede modificar la configuración de compartición'
+      });
+    }
+
+    // Actualizar configuración
+    if (typeof is_shared !== 'undefined') {
+      template.is_shared = is_shared;
+      template.can_edit_roles = is_shared ? ['super_admin'] : ['super_admin', 'admin', 'lawyer'];
+
+      if (is_shared) {
+        template.shared_with_companies = [];
+        template.company = null;
+      }
+    }
+
+    if (shared_with_companies && !is_shared) {
+      template.shared_with_companies = shared_with_companies;
+    }
+
+    await template.save();
+
+    await ActivityLog.create({
+      user: req.user.id,
+      action: 'UPDATE_SHARING',
+      entity_type: 'template',
+      entity_id: template._id,
+      description: `Actualizó configuración de compartición de plantilla "${template.name}"`,
+      company: req.companyId
+    });
+
+    res.json({
+      success: true,
+      message: 'Configuración de compartición actualizada',
+      template
+    });
+  } catch (error) {
+    console.error('Error al actualizar compartición:', error);
+    res.status(500).json({ error: 'Error al actualizar configuración de compartición' });
+  }
+});
+
+// Verificar permisos de edición de una plantilla
+router.get('/:id/can-edit', authenticate, verifyTenant, async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const template = await ContractTemplate.findById(id)
+      .populate('created_by', 'name email')
+      .populate('company', 'name');
+
+    if (!template) {
+      return res.status(404).json({ error: 'Plantilla no encontrada' });
+    }
+
+    let canEdit = false;
+    let reason = '';
+
+    // Super admin puede editar plantillas compartidas que él creó
+    if (req.user.role === 'super_admin') {
+      if (template.is_shared && template.created_by._id.toString() === req.user.id) {
+        canEdit = true;
+        reason = 'Creador de plantilla compartida';
+      } else if (!template.is_shared) {
+        canEdit = true;
+        reason = 'Super admin con acceso a todas las plantillas';
+      } else {
+        canEdit = false;
+        reason = 'Super admin solo puede editar plantillas compartidas que él creó';
+      }
+    }
+    // Admin y lawyer pueden editar plantillas de su empresa
+    else if (template.can_edit_roles.includes(req.user.role)) {
+      if (template.company && template.company._id.toString() === req.companyId) {
+        canEdit = true;
+        reason = 'Plantilla de su empresa';
+      } else {
+        canEdit = false;
+        reason = 'Plantilla no pertenece a su empresa';
+      }
+    } else {
+      canEdit = false;
+      reason = 'Rol sin permisos de edición';
+    }
+
+    res.json({
+      success: true,
+      canEdit,
+      reason,
+      template: {
+        id: template._id,
+        name: template.name,
+        is_shared: template.is_shared,
+        company: template.company,
+        created_by: template.created_by
+      }
+    });
+  } catch (error) {
+    console.error('Error al verificar permisos:', error);
+    res.status(500).json({ error: 'Error al verificar permisos de edición' });
+  }
+});
 
 module.exports = router;
 

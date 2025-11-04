@@ -4,6 +4,36 @@ const { authenticate, authorize } = require('../middleware/auth');
 const { body, validationResult } = require('express-validator');
 const Company = require('../models/Company');
 
+// Obtener empresas del usuario actual (para company switcher)
+router.get('/my-companies', authenticate, async (req, res) => {
+  try {
+    let companies;
+
+    // Si es super_admin, devolver TODAS las empresas
+    if (req.user.role === 'super_admin') {
+      const allCompanies = await Company.find({ active: true }).sort({ name: 1 });
+      companies = allCompanies.map(company => ({
+        companyId: company._id.toString(),
+        companyName: company.name,
+        roles: ['super_admin']
+      }));
+    } else {
+      // Para otros usuarios, usar companyRoles del token
+      const companyRoles = req.user.companyRoles || {};
+      companies = Object.entries(companyRoles).map(([companyId, data]) => ({
+        companyId,
+        companyName: data.name || companyId,
+        roles: data.roles || []
+      }));
+    }
+
+    res.json(companies);
+  } catch (error) {
+    console.error('Error al obtener empresas del usuario:', error);
+    res.status(500).json({ error: 'Error al obtener empresas del usuario' });
+  }
+});
+
 // Obtener todas las empresas (admin y super_admin)
 router.get('/', authenticate, authorize('admin', 'super_admin'), async (req, res) => {
   try {
@@ -37,7 +67,7 @@ router.post('/',
   authorize('admin'),
   [
     body('name').notEmpty().withMessage('El nombre es requerido'),
-    body('tax_id').notEmpty().withMessage('El RUC/NIT es requerido')
+    body('tax_id').notEmpty().withMessage('El NIT es requerido')
   ],
   async (req, res) => {
     try {
@@ -46,23 +76,24 @@ router.post('/',
         return res.status(400).json({ errors: errors.array() });
       }
 
-      const { name, tax_id, address, phone } = req.body;
+      const { name, tax_id, email, address, phone } = req.body;
 
       const company = await Company.create({
         name,
         tax_id,
+        email,
         address,
         phone
       });
 
-      res.status(201).json({ 
+      res.status(201).json({
         message: 'Empresa creada exitosamente',
-        id: company._id 
+        id: company._id
       });
     } catch (error) {
       console.error('Error al crear empresa:', error);
       if (error.code === 11000) {
-        res.status(400).json({ error: 'El RUC/NIT ya está registrado' });
+        res.status(400).json({ error: 'El NIT ya está registrado' });
       } else {
         res.status(500).json({ error: 'Error al crear empresa' });
       }
@@ -76,11 +107,12 @@ router.put('/:id',
   authorize('admin'),
   async (req, res) => {
     try {
-      const { name, tax_id, address, phone } = req.body;
+      const { name, tax_id, email, address, phone } = req.body;
 
       await Company.findByIdAndUpdate(req.params.id, {
         name,
         tax_id,
+        email,
         address,
         phone
       });

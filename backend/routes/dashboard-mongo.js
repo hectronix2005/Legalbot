@@ -14,9 +14,11 @@ router.get('/stats', authenticate, verifyTenant, async (req, res) => {
     const stats = {};
 
     if (req.user.role === 'admin' || req.user.role === 'super_admin') {
-      // Filtrar por empresa si se ha seleccionado una
-      const companyFilter = req.companyId ? { company: req.companyId } : {};
-      const templateFilter = req.companyId
+      // Si companyId es "ALL", no filtrar por empresa
+      // Si no, filtrar por empresa seleccionada
+      const companyFilter = (req.companyId && req.companyId !== 'ALL') ? { company: req.companyId } : {};
+
+      const templateFilter = (req.companyId && req.companyId !== 'ALL')
         ? { active: true, $or: [{ company: req.companyId }, { is_shared: true }] }
         : { active: true };
 
@@ -28,7 +30,7 @@ router.get('/stats', authenticate, verifyTenant, async (req, res) => {
 
       // Solicitudes por estado (filtrado por empresa si aplica)
       const aggregatePipeline = [];
-      if (req.companyId) {
+      if (req.companyId && req.companyId !== 'ALL') {
         aggregatePipeline.push({ $match: { company: req.companyId } });
       }
       aggregatePipeline.push({ $group: { _id: '$status', count: { $sum: 1 } } });

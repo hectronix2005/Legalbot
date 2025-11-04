@@ -91,6 +91,11 @@ const contractTemplateSchema = new mongoose.Schema({
     default: false,
     description: 'Indica si la plantilla es compartida entre todas las empresas (solo super_admin)'
   },
+  shared_with_companies: [{
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Company',
+    description: 'Lista de empresas específicas con las que se comparte la plantilla (solo si is_shared es false)'
+  }],
   company: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Company',
@@ -104,6 +109,27 @@ const contractTemplateSchema = new mongoose.Schema({
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User',
     required: true
+  },
+  can_edit_roles: {
+    type: [String],
+    enum: ['super_admin', 'admin', 'lawyer'],
+    default: function() {
+      // Si es compartida, solo super_admin puede editar
+      // Si no, admin y lawyer de la empresa pueden editar
+      return this.is_shared ? ['super_admin'] : ['super_admin', 'admin', 'lawyer'];
+    },
+    description: 'Roles que pueden editar esta plantilla'
+  },
+  is_copy: {
+    type: Boolean,
+    default: false,
+    description: 'Indica si esta plantilla es una copia de otra plantilla'
+  },
+  copied_from: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'ContractTemplate',
+    default: null,
+    description: 'ID de la plantilla original de la que se hizo copia'
   },
   word_file_path: String,
   word_file_original_name: String,

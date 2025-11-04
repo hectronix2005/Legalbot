@@ -115,6 +115,31 @@ const supplierSchema = new mongoose.Schema({
     description: 'Indica si el proveedor está activo'
   },
 
+  // Estado de aprobación (NUEVO)
+  approval_status: {
+    type: String,
+    enum: ['pending', 'approved', 'rejected'],
+    default: 'pending',
+    description: 'Estado de aprobación del tercero'
+  },
+  approved_by: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User',
+    description: 'Abogado que aprobó el tercero'
+  },
+  approved_at: {
+    type: Date,
+    description: 'Fecha de aprobación'
+  },
+  rejection_reason: {
+    type: String,
+    description: 'Razón del rechazo del tercero'
+  },
+  rejected_at: {
+    type: Date,
+    description: 'Fecha de rechazo'
+  },
+
   // Metadatos
   created_by: {
     type: mongoose.Schema.Types.ObjectId,

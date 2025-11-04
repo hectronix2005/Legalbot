@@ -35,14 +35,19 @@ router.get('/types', authenticate, async (req, res) => {
   }
 });
 
-// Obtener todos los proveedores de la empresa
+// Obtener todos los proveedores de la empresa (o todos si es super_admin)
 router.get('/', authenticate, verifyTenant, async (req, res) => {
   try {
     const { active } = req.query;
 
-    const filter = {
-      company: req.companyId
-    };
+    const filter = {};
+
+    // Super admin con companyId='ALL' ve todos los terceros
+    // Super admin con companyId específico ve solo esa empresa
+    // Otros usuarios solo ven los de su compañía
+    if (req.companyId && req.companyId !== 'ALL') {
+      filter.company = req.companyId;
+    }
 
     if (active !== undefined) {
       filter.active = active === 'true';
@@ -69,10 +74,14 @@ router.get('/', authenticate, verifyTenant, async (req, res) => {
 // Verificar si un tercero tiene referencias en contratos o plantillas
 router.get('/:id/check-references', authenticate, verifyTenant, async (req, res) => {
   try {
-    const supplier = await Supplier.findOne({
-      _id: req.params.id,
-      company: req.companyId
-    }).populate('third_party_type', 'code');
+    // Construir query del supplier - si es "ALL", no filtrar por company
+    const supplierQuery = { _id: req.params.id };
+    if (req.companyId && req.companyId !== 'ALL') {
+      supplierQuery.company = req.companyId;
+    }
+
+    const supplier = await Supplier.findOne(supplierQuery)
+      .populate('third_party_type', 'code');
 
     if (!supplier) {
       return res.status(404).json({ error: 'Tercero no encontrado' });
@@ -89,24 +98,32 @@ router.get('/:id/check-references', authenticate, verifyTenant, async (req, res)
 
     // Buscar contratos que mencionen al tercero
     // Buscamos en el contenido del contrato si aparece su nombre o identificación
-    const contractsWithReference = await Contract.find({
-      company: req.companyId,
+    const contractQuery = {
       $or: [
         { content: { $regex: supplier.legal_name, $options: 'i' } },
         { content: { $regex: supplier.identification_number, $options: 'i' } },
         { title: { $regex: supplier.legal_name, $options: 'i' } }
       ]
-    }).countDocuments();
+    };
+    if (req.companyId && req.companyId !== 'ALL') {
+      contractQuery.company = req.companyId;
+    }
+
+    const contractsWithReference = await Contract.find(contractQuery).countDocuments();
 
     references.details.contracts = contractsWithReference;
 
     // Buscar plantillas del mismo tipo de tercero
     if (supplier.third_party_type) {
-      const templatesWithType = await ContractTemplate.find({
-        company: req.companyId,
+      const templateQuery = {
         third_party_type: supplier.third_party_type.code,
         active: true
-      }).countDocuments();
+      };
+      if (req.companyId && req.companyId !== 'ALL') {
+        templateQuery.company = req.companyId;
+      }
+
+      const templatesWithType = await ContractTemplate.find(templateQuery).countDocuments();
 
       references.details.templates = templatesWithType;
     }

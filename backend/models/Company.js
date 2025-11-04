@@ -10,6 +10,10 @@ const companySchema = new mongoose.Schema({
     required: true,
     unique: true
   },
+  email: {
+    type: String,
+    required: false
+  },
   address: String,
   phone: String,
   active: {

@@ -57,6 +57,12 @@ const verifyTenant = async (req, res, next) => {
     // Obtener companyId del header
     const companyId = req.headers['x-company-id'];
 
+    // Super admin con "ALL" = acceso a todas las empresas sin filtro
+    if (req.user.role === 'super_admin' && companyId === 'ALL') {
+      req.companyId = 'ALL';
+      return next();
+    }
+
     // Super admin no necesita companyId (acceso global)
     if (req.user.role === 'super_admin') {
       req.companyId = companyId || null;

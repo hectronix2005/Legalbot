@@ -18,11 +18,10 @@ router.get('/', authenticate, verifyTenant, async (req, res) => {
 
     const filter = {};
 
-    // Super admin puede ver todas las empresas o filtrar por la seleccionada
-    if (req.user.role === 'super_admin' && !req.companyId) {
-      // Ver todos los contratos
-    } else if (req.companyId) {
-      // Filtrar por empresa seleccionada
+    // Super admin con "ALL" ve todos los contratos sin filtrar
+    // Super admin con companyId específico o sin companyId también filtra
+    // Otros usuarios siempre filtran por su empresa
+    if (req.companyId && req.companyId !== 'ALL') {
       filter.company = req.companyId;
     }
 

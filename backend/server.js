@@ -4,15 +4,22 @@ const path = require('path');
 require('dotenv').config();
 const connectDB = require('./config/mongodb');
 const { dataProtectionMiddleware } = require('./middleware/dataProtection');
+const { configureLocalSecurity } = require('./middleware/localDevSecurity');
 const {
   createFullBackup,
   cleanOldBackups,
   verifyDataIntegrity,
   promoteToWeekly
 } = require('./services/robustBackup');
+const {
+  startMonitoring,
+  stopMonitoring,
+  fullSystemCheck,
+  updateKnownGoodCounts
+} = require('./services/dataLossProtection');
 
 const app = express();
-const PORT = process.env.PORT || 5000;
+const PORT = process.env.PORT || 3002;
 
 // Variable para rastrear conexión
 let mongoConnected = false;
@@ -24,6 +31,9 @@ connectDB().then(() => {
 }).catch(error => {
   console.error('Error conectando a MongoDB:', error);
 });
+
+// Configurar seguridad para entorno local
+configureLocalSecurity(app);
 
 // Middleware
 app.use(cors());
@@ -62,6 +72,12 @@ const contractGeneratorRoutes = require('./routes/contract-generator');
 const documentManagementRoutes = require('./routes/document-management');
 const supplierRoutes = require('./routes/suppliers');
 const thirdPartyTypesConfigRoutes = require('./routes/third-party-types-config');
+const diagnosticsRoutes = require('./routes/diagnostics');
+
+// Nuevas rutas para el sistema de categorías y aprobaciones
+const contractCategoriesRoutes = require('./routes/contract-categories');
+const supplierApprovalsRoutes = require('./routes/supplier-approvals');
+const contractRequestsImprovedRoutes = require('./routes/contract-requests-improved');
 
 // Usar rutas
 app.use('/api/auth', authRoutes);
@@ -79,42 +95,58 @@ app.use('/api/contract-generator', contractGeneratorRoutes);
 app.use('/api/documents', documentManagementRoutes);
 app.use('/api/suppliers', supplierRoutes);
 app.use('/api/third-party-types', thirdPartyTypesConfigRoutes);
+app.use('/api/diagnostics', diagnosticsRoutes);
 
-// Ruta raíz - Información de la API
-app.get('/', (req, res) => {
-  res.json({
-    name: 'Legal Bot API',
-    version: '1.0.0',
-    status: 'running',
-    environment: process.env.NODE_ENV || 'development',
-    endpoints: {
-      health: '/api/health',
-      auth: '/api/auth',
-      contracts: '/api/contracts',
-      templates: '/api/templates',
-      dashboard: '/api/dashboard',
-      users: '/api/users',
-      companies: '/api/companies'
-    },
-    documentation: 'Para más información, contacta al administrador'
-  });
-});
+// Nuevas rutas
+app.use('/api/contract-categories', contractCategoriesRoutes);
+app.use('/api/supplier-approvals', supplierApprovalsRoutes);
+app.use('/api/contract-requests-v2', contractRequestsImprovedRoutes);
+
+// Ruta raíz - Comentada para permitir que el frontend se sirva en /
+// La información de la API está disponible en /api/health
+// app.get('/', (req, res) => {
+//   res.json({
+//     name: 'Legal Bot API',
+//     version: '1.0.0',
+//     status: 'running',
+//     environment: process.env.NODE_ENV || 'development',
+//     endpoints: {
+//       health: '/api/health',
+//       auth: '/api/auth',
+//       contracts: '/api/contracts',
+//       templates: '/api/templates',
+//       dashboard: '/api/dashboard',
+//       users: '/api/users',
+//       companies: '/api/companies'
+//     },
+//     documentation: 'Para más información, contacta al administrador'
+//   });
+// });
 
 // Ruta de prueba
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', message: 'API de contratos funcionando correctamente' });
 });
 
-// Servir archivos estáticos del frontend en producción (solo si existe el directorio)
-if (process.env.NODE_ENV === 'production') {
-  const frontendPath = path.join(__dirname, '../frontend/dist');
-  if (fs.existsSync(frontendPath)) {
-    app.use(express.static(frontendPath));
+// Servir archivos estáticos del frontend (desarrollo y producción)
+const frontendPath = process.env.NODE_ENV === 'production'
+  ? path.join(__dirname, '../frontend/dist')
+  : path.join(__dirname, '../frontend/build');
 
-    app.get('*', (req, res) => {
-      res.sendFile(path.join(frontendPath, 'index.html'));
-    });
-  }
+if (fs.existsSync(frontendPath)) {
+  console.log(`📁 Sirviendo frontend desde: ${frontendPath}`);
+  app.use(express.static(frontendPath));
+
+  // Todas las rutas que no sean API deben servir el index.html (SPA)
+  app.get('*', (req, res, next) => {
+    // Ignorar rutas de API
+    if (req.path.startsWith('/api')) {
+      return next();
+    }
+    res.sendFile(path.join(frontendPath, 'index.html'));
+  });
+} else {
+  console.log('⚠️  Frontend build no encontrado. Ejecuta "npm run build" en la carpeta frontend');
 }
 
 // Manejo de errores
@@ -194,6 +226,12 @@ const initializeDataProtection = async () => {
     }, 60 * 60 * 1000); // Revisar cada hora
 
     console.log('✅ Sistema de protección de datos inicializado');
+
+    // Inicializar conteos conocidos buenos
+    await updateKnownGoodCounts();
+
+    // Iniciar monitoreo continuo (cada 15 minutos)
+    startMonitoring(15);
   } catch (error) {
     console.error('❌ Error inicializando protección de datos:', error);
   }
@@ -204,6 +242,7 @@ process.on('SIGTERM', async () => {
   console.log('\n⚠️  Señal SIGTERM recibida, cerrando servidor...');
   if (backupInterval) clearInterval(backupInterval);
   if (weeklyBackupInterval) clearInterval(weeklyBackupInterval);
+  stopMonitoring();
   console.log('📦 Creando backup final...');
   try {
     await createFullBackup('SHUTDOWN');
@@ -217,6 +256,7 @@ process.on('SIGINT', async () => {
   console.log('\n⚠️  Señal SIGINT recibida, cerrando servidor...');
   if (backupInterval) clearInterval(backupInterval);
   if (weeklyBackupInterval) clearInterval(weeklyBackupInterval);
+  stopMonitoring();
   console.log('📦 Creando backup final...');
   try {
     await createFullBackup('SHUTDOWN');
