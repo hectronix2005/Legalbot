@@ -581,10 +581,22 @@ router.post('/',
       // Si es plantilla compartida, no asignar empresa
       // Si no es compartida, asignar la empresa del usuario
       if (!is_shared) {
-        if (req.companyId) {
+        // Verificar que companyId existe y no es "ALL" (caso super_admin sin empresa específica)
+        if (req.companyId && req.companyId !== 'ALL') {
           templateData.company = req.companyId;
         } else {
-          console.warn('⚠️  Usuario sin companyId intentando crear plantilla no compartida');
+          console.warn('⚠️  Usuario sin companyId válido intentando crear plantilla no compartida');
+          console.warn('⚠️  CompanyId:', req.companyId, 'Role:', req.user.role);
+
+          // Si es super_admin sin company específica, convertir a plantilla compartida
+          if (req.user.role === 'super_admin' && req.companyId === 'ALL') {
+            console.log('🔄 Convirtiendo plantilla a compartida (super_admin con ALL)');
+            templateData.is_shared = true;
+          } else {
+            return res.status(400).json({
+              error: 'Debe especificar una empresa válida para plantillas no compartidas'
+            });
+          }
         }
       }
 
