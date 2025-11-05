@@ -69,9 +69,15 @@ const contractTemplateSchema = new mongoose.Schema({
   },
   third_party_type: {
     type: String,
-    enum: ['proveedor', 'cliente', 'empleado', 'arrendador', 'arrendatario', 'contratista', 'otro'],
-    description: 'Tipo de tercero involucrado en el contrato',
-    default: 'otro'
+    description: 'Código del tipo de tercero involucrado en el contrato (ej: proveedor, cliente, ph, contador_ph, etc.)',
+    default: 'otro',
+    validate: {
+      validator: function(v) {
+        // Validar que sea un string no vacío
+        return v && v.length > 0;
+      },
+      message: 'El tipo de tercero debe ser un código válido'
+    }
   },
   content: {
     type: String,

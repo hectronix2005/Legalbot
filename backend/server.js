@@ -40,6 +40,27 @@ app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
+// Middleware de logging global - CAPTURA TODAS LAS PETICIONES
+app.use((req, res, next) => {
+  const timestamp = new Date().toISOString();
+  console.log(`\n📨 [${timestamp}] ${req.method} ${req.path}`);
+  console.log(`   IP: ${req.ip}`);
+  console.log(`   Origin: ${req.headers.origin || 'no-origin'}`);
+
+  if (req.method === 'POST' || req.method === 'PUT' || req.method === 'PATCH') {
+    console.log(`   Body keys: ${Object.keys(req.body).join(', ')}`);
+  }
+
+  // Capturar el response
+  const originalSend = res.send;
+  res.send = function(data) {
+    console.log(`   ✅ Response: ${res.statusCode}`);
+    originalSend.call(this, data);
+  };
+
+  next();
+});
+
 // Middleware de protección de datos
 app.use(dataProtectionMiddleware);
 
@@ -161,10 +182,22 @@ if (frontendPath) {
   console.log('   Ubicaciones buscadas:', possibleFrontendPaths);
 }
 
-// Manejo de errores
+// Manejo de errores global - CAPTURA TODOS LOS ERRORES
 app.use((err, req, res, next) => {
-  console.error('Error:', err);
-  res.status(500).json({ error: 'Error interno del servidor' });
+  console.error('\n❌❌❌ ERROR CAPTURADO ❌❌❌');
+  console.error(`   Ruta: ${req.method} ${req.path}`);
+  console.error(`   Error name: ${err.name}`);
+  console.error(`   Error message: ${err.message}`);
+  console.error(`   Error stack:`, err.stack);
+
+  if (req.body && Object.keys(req.body).length > 0) {
+    console.error(`   Request body keys: ${Object.keys(req.body).join(', ')}`);
+  }
+
+  res.status(err.status || 500).json({
+    error: err.message || 'Error interno del servidor',
+    details: process.env.NODE_ENV === 'development' ? err.stack : undefined
+  });
 });
 
 // Variables para control de backups

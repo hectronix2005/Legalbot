@@ -540,12 +540,17 @@ router.post('/',
   ],
   async (req, res) => {
     try {
+      console.log('🔵 [POST /templates] Iniciando creación de plantilla');
+      console.log('🔵 User:', req.user?.email, 'Role:', req.user?.role, 'CompanyId:', req.companyId);
+
       const errors = validationResult(req);
       if (!errors.isEmpty()) {
         return res.status(400).json({ errors: errors.array() });
       }
 
       const { name, description, category, content, fields, wordFilePath, wordFileOriginalName, is_shared, third_party_type } = req.body;
+
+      console.log('🔵 Template data:', { name, category, third_party_type, is_shared, hasWordFile: !!wordFilePath });
 
       if (!content && !wordFilePath) {
         return res.status(400).json({ error: 'Debe proporcionar contenido o un archivo Word' });
@@ -576,10 +581,18 @@ router.post('/',
       // Si es plantilla compartida, no asignar empresa
       // Si no es compartida, asignar la empresa del usuario
       if (!is_shared) {
-        templateData.company = req.companyId;
+        if (req.companyId) {
+          templateData.company = req.companyId;
+        } else {
+          console.warn('⚠️  Usuario sin companyId intentando crear plantilla no compartida');
+        }
       }
 
+      console.log('🔵 Creating template with data:', JSON.stringify(templateData, null, 2));
+
       const template = await ContractTemplate.create(templateData);
+
+      console.log('✅ Template created with ID:', template._id);
 
       // Guardar en historial
       await VersionHistory.create({
@@ -591,21 +604,33 @@ router.post('/',
       });
 
       // Log de actividad
-      await ActivityLog.create({
+      const activityLogData = {
         user: req.user.id,
         action: 'CREATE',
         entity_type: 'template',
         entity_id: template._id,
         description: `Creó la plantilla: ${name}`
-      });
+      };
 
-      res.status(201).json({ 
+      // Solo agregar company si existe
+      if (req.companyId) {
+        activityLogData.company = req.companyId;
+      }
+
+      await ActivityLog.create(activityLogData);
+
+      console.log('✅ Template creation completed successfully');
+
+      res.status(201).json({
         message: 'Plantilla creada exitosamente',
-        id: template._id 
+        id: template._id
       });
     } catch (error) {
-      console.error('Error al crear plantilla:', error);
-      res.status(500).json({ error: 'Error al crear plantilla' });
+      console.error('❌ Error al crear plantilla:', error);
+      console.error('❌ Error stack:', error.stack);
+      console.error('❌ Error name:', error.name);
+      console.error('❌ Error message:', error.message);
+      res.status(500).json({ error: 'Error al crear plantilla: ' + error.message });
     }
   }
 );
