@@ -15,11 +15,16 @@ const supplierSchema = new mongoose.Schema({
     trim: true,
     description: 'Número de identificación del proveedor'
   },
+  id_issue_city: {
+    type: String,
+    trim: true,
+    description: 'Ciudad de expedición del documento de identificación'
+  },
   legal_name: {
     type: String,
     required: true,
     trim: true,
-    description: 'Razón social completa del proveedor'
+    description: 'Razón social completa del proveedor / Nombre completo'
   },
   legal_name_short: {
     type: String,

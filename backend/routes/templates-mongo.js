@@ -317,13 +317,22 @@ router.post('/:id/generate-contract',
       }
 
       // Buscar plantilla
-      const template = await ContractTemplate.findOne({
-        _id: req.params.id,
-        $or: [
-          { company: req.companyId },
-          { is_shared: true }
-        ]
-      });
+      const filter = { _id: req.params.id };
+
+      // Si es super_admin, puede acceder a cualquier plantilla
+      // Si no, filtrar por company o plantillas compartidas
+      if (req.user.role !== 'super_admin') {
+        if (req.companyId && req.companyId !== 'ALL') {
+          filter.$or = [
+            { company: req.companyId },
+            { is_shared: true }
+          ];
+        } else {
+          filter.is_shared = true;
+        }
+      }
+
+      const template = await ContractTemplate.findOne(filter);
 
       if (!template) {
         return res.status(404).json({ error: 'Plantilla no encontrada' });
@@ -400,10 +409,13 @@ router.post('/:id/generate-contract',
 
       // Extraer información del tercero para búsqueda
       const terceroInfo = extractTerceroInfo(contractData, template);
+      console.log('📋 Información del tercero extraída:', terceroInfo);
 
       // Crear registro de contrato en BD
       const Contract = require('../models/Contract');
-      const contract = await Contract.create({
+
+      // Preparar datos del nuevo contrato para BD
+      const newContractRecord = {
         template: template._id,
         contract_number: contractNumber,
         title: terceroInfo.title || `Contrato ${contractNumber}`,
@@ -412,30 +424,87 @@ router.post('/:id/generate-contract',
         company_name: terceroInfo.tercero || '',
         file_path: contractFilePath,
         generated_by: req.user.id,
-        company: req.companyId,
         status: 'active'
-      });
+      };
+
+      // Solo agregar company si es un ObjectId válido (no 'ALL')
+      if (req.companyId && req.companyId !== 'ALL') {
+        newContractRecord.company = req.companyId;
+        console.log('🏢 Asignando companyId:', req.companyId);
+      } else {
+        console.log('⚠️  CompanyId es ALL o undefined, no se asigna company al contrato');
+      }
+
+      console.log('💾 Guardando contrato en BD...');
+      const contract = await Contract.create(newContractRecord);
 
       console.log('✅ Contrato guardado en BD:', contract._id);
 
       // Registrar actividad
       const ActivityLog = require('../models/ActivityLog');
-      await ActivityLog.create({
+      const activityData = {
         user: req.user.id,
         action: 'GENERATE',
         entity_type: 'contract',
         entity_id: contract._id,
         description: `Generó contrato ${contractNumber} desde plantilla "${template.name}"`
-      });
+      };
+
+      // Solo agregar company al log si existe
+      if (req.companyId && req.companyId !== 'ALL') {
+        activityData.company = req.companyId;
+      }
+
+      await ActivityLog.create(activityData);
+      console.log('📝 Actividad registrada');
 
       res.json({
+        success: true,
         message: 'Contrato generado exitosamente',
-        contract: contract,
+        contract: {
+          _id: contract._id,
+          contract_number: contract.contract_number,
+          title: contract.title,
+          file_path: contract.file_path,
+          status: contract.status,
+          created_at: contract.createdAt
+        },
         contractNumber: contractNumber
       });
     } catch (error) {
-      console.error('Error al generar contrato:', error);
-      res.status(500).json({ error: 'Error al generar contrato' });
+      console.error('❌ Error al generar contrato:', error);
+
+      // Determinar el tipo de error y responder apropiadamente
+      let errorMessage = 'Error al generar contrato';
+      let statusCode = 500;
+
+      if (error.name === 'ValidationError') {
+        errorMessage = 'Error de validación: ' + Object.values(error.errors).map(e => e.message).join(', ');
+        statusCode = 400;
+      } else if (error.name === 'CastError') {
+        errorMessage = 'Error de tipo de datos: ' + error.message;
+        statusCode = 400;
+      } else if (error.message && error.message.includes('ENOENT')) {
+        errorMessage = 'No se pudo encontrar el archivo de la plantilla';
+        statusCode = 404;
+      } else if (error.message && error.message.includes('Docxtemplater')) {
+        errorMessage = 'Error al procesar la plantilla Word: ' + error.message;
+        statusCode = 500;
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+
+      console.error('📊 Detalles del error:', {
+        name: error.name,
+        message: error.message,
+        stack: error.stack?.split('\n').slice(0, 3).join('\n')
+      });
+
+      res.status(statusCode).json({
+        success: false,
+        error: errorMessage,
+        details: process.env.NODE_ENV === 'development' ? error.message : undefined
+      });
     }
   }
 );
@@ -548,9 +617,16 @@ router.post('/',
         return res.status(400).json({ errors: errors.array() });
       }
 
-      const { name, description, category, content, fields, wordFilePath, wordFileOriginalName, is_shared, third_party_type } = req.body;
+      const { name, description, category, content, fields, wordFilePath, wordFileOriginalName, is_shared, shared_with_companies, third_party_type } = req.body;
 
-      console.log('🔵 Template data:', { name, category, third_party_type, is_shared, hasWordFile: !!wordFilePath });
+      console.log('🔵 Template data:', {
+        name,
+        category,
+        third_party_type,
+        is_shared,
+        shared_with_companies: shared_with_companies?.length || 0,
+        hasWordFile: !!wordFilePath
+      });
 
       if (!content && !wordFilePath) {
         return res.status(400).json({ error: 'Debe proporcionar contenido o un archivo Word' });
@@ -559,8 +635,17 @@ router.post('/',
       // Verificar permisos para plantillas compartidas
       if (is_shared && req.user.role !== 'super_admin') {
         return res.status(403).json({
-          error: 'Solo el super administrador puede crear plantillas compartidas'
+          error: 'Solo el super administrador puede crear plantillas compartidas globalmente'
         });
+      }
+
+      // Verificar permisos para shared_with_companies
+      if (shared_with_companies && shared_with_companies.length > 0) {
+        if (req.user.role !== 'super_admin' && req.user.role !== 'admin') {
+          return res.status(403).json({
+            error: 'Solo administradores pueden compartir plantillas con empresas específicas'
+          });
+        }
       }
 
       // Crear plantilla
@@ -578,12 +663,21 @@ router.post('/',
         is_shared: is_shared || false
       };
 
-      // Si es plantilla compartida, no asignar empresa
-      // Si no es compartida, asignar la empresa del usuario
-      if (!is_shared) {
-        // Verificar que companyId existe y no es "ALL" (caso super_admin sin empresa específica)
+      // Manejar compartición de plantillas
+      if (is_shared) {
+        // Plantilla compartida con todas las empresas (solo super_admin)
+        console.log('🌐 Creando plantilla compartida con todas las empresas');
+      } else if (shared_with_companies && shared_with_companies.length > 0) {
+        // Plantilla compartida con empresas específicas
+        templateData.shared_with_companies = shared_with_companies;
+        templateData.is_shared = false;
+        console.log('🏢 Compartiendo plantilla con empresas:', shared_with_companies.length);
+      } else {
+        // Plantilla solo para una empresa específica
+        // Verificar que companyId existe y no es "ALL"
         if (req.companyId && req.companyId !== 'ALL') {
           templateData.company = req.companyId;
+          console.log('🏢 Plantilla para empresa específica:', req.companyId);
         } else {
           console.warn('⚠️  Usuario sin companyId válido intentando crear plantilla no compartida');
           console.warn('⚠️  CompanyId:', req.companyId, 'Role:', req.user.role);
@@ -594,7 +688,7 @@ router.post('/',
             templateData.is_shared = true;
           } else {
             return res.status(400).json({
-              error: 'Debe especificar una empresa válida para plantillas no compartidas'
+              error: 'Debe especificar una empresa válida o seleccionar empresas para compartir'
             });
           }
         }

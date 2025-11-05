@@ -4,6 +4,24 @@ const PizZip = require('pizzip');
 const fs = require('fs');
 
 /**
+ * Normaliza el nombre de un campo para evitar duplicados
+ * Elimina acentos, convierte a minúsculas y remueve separadores
+ * @param {string} fieldName - Nombre del campo a normalizar
+ * @returns {string} - Nombre normalizado
+ */
+function normalizeFieldName(fieldName) {
+  return fieldName
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '') // Remover acentos
+    .toLowerCase()
+    .replace(/[_\s\/\-]+/g, '') // Remover espacios, guiones bajos, barras y guiones
+    .replace(/de/g, '') // Remover "de"
+    .replace(/del/g, '') // Remover "del"
+    .replace(/la/g, '') // Remover "la"
+    .replace(/el/g, ''); // Remover "el"
+}
+
+/**
  * Procesa un archivo Word y extrae campos resaltados en amarillo
  * @param {Buffer} fileBuffer - Buffer del archivo Word
  * @returns {Promise<Object>} - Objeto con contenido y campos detectados
@@ -26,17 +44,22 @@ async function extractYellowHighlightedFields(fileBuffer) {
     // Buscar texto entre {{ }} que es común en plantillas
     const templateVarRegex = /\{\{([^}]+)\}\}/g;
     const fields = [];
-    const fieldNames = new Set();
-    
+    const normalizedFieldNames = new Map(); // Mapeo de nombre normalizado -> nombre original
+
     let match;
     while ((match = templateVarRegex.exec(html)) !== null) {
       const fieldName = match[1].trim();
-      if (!fieldNames.has(fieldName)) {
-        fieldNames.add(fieldName);
-        
+      const normalized = normalizeFieldName(fieldName);
+
+      // Solo agregar si no existe un campo con el mismo nombre normalizado
+      if (!normalizedFieldNames.has(normalized)) {
+        normalizedFieldNames.set(normalized, fieldName);
+
         // Generar etiqueta legible desde el nombre del campo
         const fieldLabel = fieldName
           .replace(/_/g, ' ')
+          .replace(/\//g, ' ')
+          .replace(/-/g, ' ')
           .replace(/([A-Z])/g, ' $1')
           .trim()
           .split(' ')
@@ -50,6 +73,10 @@ async function extractYellowHighlightedFields(fileBuffer) {
           required: true,
           display_order: fields.length
         });
+
+        console.log(`✅ Campo agregado: "${fieldName}" (normalizado: "${normalized}")`);
+      } else {
+        console.log(`⚠️  Campo duplicado omitido: "${fieldName}" (ya existe como "${normalizedFieldNames.get(normalized)}")`);
       }
     }
 
@@ -57,11 +84,15 @@ async function extractYellowHighlightedFields(fileBuffer) {
     const mergeFieldRegex = /MERGEFIELD\s+([^\s\\]+)/gi;
     while ((match = mergeFieldRegex.exec(html)) !== null) {
       const fieldName = match[1].trim();
-      if (!fieldNames.has(fieldName)) {
-        fieldNames.add(fieldName);
-        
+      const normalized = normalizeFieldName(fieldName);
+
+      if (!normalizedFieldNames.has(normalized)) {
+        normalizedFieldNames.set(normalized, fieldName);
+
         const fieldLabel = fieldName
           .replace(/_/g, ' ')
+          .replace(/\//g, ' ')
+          .replace(/-/g, ' ')
           .replace(/([A-Z])/g, ' $1')
           .trim()
           .split(' ')
@@ -75,8 +106,14 @@ async function extractYellowHighlightedFields(fileBuffer) {
           required: true,
           display_order: fields.length
         });
+
+        console.log(`✅ MERGEFIELD agregado: "${fieldName}" (normalizado: "${normalized}")`);
+      } else {
+        console.log(`⚠️  MERGEFIELD duplicado omitido: "${fieldName}" (ya existe como "${normalizedFieldNames.get(normalized)}")`);
       }
     }
+
+    console.log(`📊 Total de campos únicos extraídos: ${fields.length}`);
 
     return {
       content: html,
@@ -169,6 +206,7 @@ module.exports = {
   extractYellowHighlightedFields,
   generateDocumentFromTemplate,
   extractPlainText,
-  detectFieldType
+  detectFieldType,
+  normalizeFieldName
 };
 

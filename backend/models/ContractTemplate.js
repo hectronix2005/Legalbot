@@ -65,7 +65,15 @@ const contractTemplateSchema = new mongoose.Schema({
   description: String,
   category: {
     type: String,
-    enum: ['Laboral', 'Comercial', 'Inmobiliario', 'Legal', 'Servicios', 'Confidencialidad', 'Compraventa', 'Arrendamiento', 'Otro']
+    default: 'Otro',
+    description: 'Categoría del contrato (ej: Laboral, Comercial, Inmobiliario, etc.)',
+    validate: {
+      validator: function(v) {
+        // Validar que sea un string no vacío si se proporciona
+        return !v || (v && v.length > 0);
+      },
+      message: 'La categoría debe ser un texto válido'
+    }
   },
   third_party_type: {
     type: String,

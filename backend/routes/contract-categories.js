@@ -11,13 +11,18 @@ router.get('/',
   verifyTenant,
   async (req, res) => {
     try {
-      const categories = await ContractCategory.find({
-        company: req.companyId,
-        active: true
-      })
-      .populate('template', 'name')
-      .populate('created_by', 'name email')
-      .sort({ name: 1 });
+      const filter = { active: true };
+
+      // Si es super_admin con ALL, devolver todas las categorías activas
+      // Si no, filtrar por companyId
+      if (req.user.role !== 'super_admin' && req.companyId && req.companyId !== 'ALL') {
+        filter.company = req.companyId;
+      }
+
+      const categories = await ContractCategory.find(filter)
+        .populate('template', 'name')
+        .populate('created_by', 'name email')
+        .sort({ name: 1 });
 
       res.json(categories);
     } catch (error) {
@@ -33,12 +38,16 @@ router.get('/:id',
   verifyTenant,
   async (req, res) => {
     try {
-      const category = await ContractCategory.findOne({
-        _id: req.params.id,
-        company: req.companyId
-      })
-      .populate('template', 'name description')
-      .populate('created_by', 'name email');
+      const filter = { _id: req.params.id };
+
+      // Si no es super_admin, filtrar por companyId
+      if (req.user.role !== 'super_admin' && req.companyId && req.companyId !== 'ALL') {
+        filter.company = req.companyId;
+      }
+
+      const category = await ContractCategory.findOne(filter)
+        .populate('template', 'name description')
+        .populate('created_by', 'name email');
 
       if (!category) {
         return res.status(404).json({ error: 'Categoría no encontrada' });

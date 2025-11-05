@@ -200,6 +200,7 @@ router.post('/',
       const {
         identification_type,
         identification_number,
+        id_issue_city,
         legal_name,
         legal_name_short,
         legal_representative_name,
@@ -231,6 +232,7 @@ router.post('/',
       const supplier = await Supplier.create({
         identification_type,
         identification_number,
+        id_issue_city,
         legal_name,
         legal_name_short,
         legal_representative_name,
@@ -289,6 +291,7 @@ router.put('/:id',
       const {
         identification_type,
         identification_number,
+        id_issue_city,
         legal_name,
         legal_name_short,
         legal_representative_name,
@@ -322,6 +325,7 @@ router.put('/:id',
       // Actualizar campos
       if (identification_type) supplier.identification_type = identification_type;
       if (identification_number) supplier.identification_number = identification_number;
+      if (id_issue_city !== undefined) supplier.id_issue_city = id_issue_city;
       if (legal_name) supplier.legal_name = legal_name;
       if (legal_name_short) supplier.legal_name_short = legal_name_short;
       if (legal_representative_name) supplier.legal_representative_name = legal_representative_name;

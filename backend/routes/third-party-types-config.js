@@ -78,7 +78,9 @@ router.post('/',
         return res.status(400).json({ errors: errors.array() });
       }
 
-      const { code, label, description, icon, fields, is_system, company } = req.body;
+      const { code, label, description, icon, fields, default_identification_types, is_system, company } = req.body;
+
+      console.log('📝 [POST /third-party-types] Creating type with data:', { code, label, default_identification_types: default_identification_types?.length });
 
       // Verificar si ya existe
       const existing = await ThirdPartyTypeConfig.findOne({
@@ -103,10 +105,13 @@ router.post('/',
         description: description || '',
         icon: icon || '📄',
         fields: fields || [],
+        default_identification_types: default_identification_types || [],
         is_system: is_system || false,
         company: company || null,
         created_by: req.user.id
       };
+
+      console.log('💾 [POST /third-party-types] Saving type with default_identification_types:', typeData.default_identification_types);
 
       const newType = await ThirdPartyTypeConfig.create(typeData);
 
@@ -146,13 +151,19 @@ router.put('/:id',
         }
       }
 
-      const { label, description, icon, fields, active } = req.body;
+      const { label, description, icon, fields, default_identification_types, active } = req.body;
+
+      console.log('✏️ [PUT /third-party-types] Updating type with data:', { label, default_identification_types: default_identification_types?.length });
 
       // Actualizar campos
       if (label) type.label = label;
       if (description !== undefined) type.description = description;
       if (icon) type.icon = icon;
       if (fields) type.fields = fields;
+      if (default_identification_types !== undefined) {
+        type.default_identification_types = default_identification_types;
+        console.log('💾 [PUT /third-party-types] Updated default_identification_types:', default_identification_types);
+      }
       if (active !== undefined) type.active = active;
       type.updated_by = req.user.id;
 
