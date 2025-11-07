@@ -180,7 +180,7 @@ router.get('/:id', authenticate, verifyTenant, async (req, res) => {
 router.post('/',
   authenticate,
   verifyTenant,
-  authorize('super_admin', 'admin'),
+  authorize('super_admin', 'admin', 'lawyer'),
   [
     body('identification_type').notEmpty().withMessage('El tipo de identificación es requerido'),
     body('identification_number').notEmpty().withMessage('El número de identificación es requerido'),
@@ -276,7 +276,7 @@ router.post('/',
 router.put('/:id',
   authenticate,
   verifyTenant,
-  authorize('super_admin', 'admin'),
+  authorize('super_admin', 'admin', 'lawyer'),
   async (req, res) => {
     try {
       const supplier = await Supplier.findOne({
@@ -369,7 +369,7 @@ router.put('/:id',
 router.patch('/:id/toggle-status',
   authenticate,
   verifyTenant,
-  authorize('super_admin', 'admin'),
+  authorize('super_admin', 'admin', 'lawyer'),
   async (req, res) => {
     try {
       const supplier = await Supplier.findOne({
@@ -411,7 +411,7 @@ router.patch('/:id/toggle-status',
 router.delete('/:id',
   authenticate,
   verifyTenant,
-  authorize('super_admin', 'admin'),
+  authorize('super_admin', 'admin', 'lawyer'),
   async (req, res) => {
     try {
       const supplier = await Supplier.findOne({

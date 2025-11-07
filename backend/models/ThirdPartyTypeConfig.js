@@ -97,11 +97,22 @@ const thirdPartyTypeConfigSchema = new mongoose.Schema({
     default: true,
     description: 'Si el tipo está activo'
   },
+  isGeneric: {
+    type: Boolean,
+    default: false,
+    description: 'Si el tipo aplica para todas las empresas (genérico)'
+  },
+  companies: {
+    type: [mongoose.Schema.Types.ObjectId],
+    ref: 'Company',
+    default: [],
+    description: 'Empresas que pueden usar este tipo (vacío si isGeneric=true)'
+  },
   company: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Company',
     default: null,
-    description: 'Empresa propietaria (null = configuración global)'
+    description: 'DEPRECATED: Usar isGeneric y companies en su lugar. Se mantiene por compatibilidad'
   },
   created_by: {
     type: mongoose.Schema.Types.ObjectId,
@@ -118,7 +129,9 @@ const thirdPartyTypeConfigSchema = new mongoose.Schema({
 });
 
 // Índices
-thirdPartyTypeConfigSchema.index({ code: 1, company: 1 }, { unique: true });
+thirdPartyTypeConfigSchema.index({ code: 1 });
 thirdPartyTypeConfigSchema.index({ active: 1 });
+thirdPartyTypeConfigSchema.index({ isGeneric: 1 });
+thirdPartyTypeConfigSchema.index({ companies: 1 });
 
 module.exports = mongoose.model('ThirdPartyTypeConfig', thirdPartyTypeConfigSchema);

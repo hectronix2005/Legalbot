@@ -116,8 +116,8 @@ const supplierSchema = new mongoose.Schema({
   // Estado
   active: {
     type: Boolean,
-    default: true,
-    description: 'Indica si el proveedor está activo'
+    default: false,
+    description: 'Indica si el proveedor está activo (se activa después de aprobación)'
   },
 
   // Estado de aprobación (NUEVO)

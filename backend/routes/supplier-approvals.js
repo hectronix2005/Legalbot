@@ -13,8 +13,7 @@ router.get('/pending',
     try {
       const pendingSuppliers = await Supplier.find({
         company: req.companyId,
-        approval_status: 'pending',
-        active: true
+        approval_status: 'pending'
       })
       .populate('created_by', 'name email')
       .populate('third_party_type', 'name')
@@ -37,8 +36,7 @@ router.get('/all',
       const { status } = req.query;
 
       const filter = {
-        company: req.companyId,
-        active: true
+        company: req.companyId
       };
 
       if (status) {
@@ -81,10 +79,11 @@ router.post('/:id/approve',
         });
       }
 
-      // Aprobar el tercero
+      // Aprobar el tercero y activarlo
       supplier.approval_status = 'approved';
       supplier.approved_by = req.user.id;
       supplier.approved_at = new Date();
+      supplier.active = true; // Activar al aprobar
       supplier.updated_by = req.user.id;
       await supplier.save();
 
@@ -93,8 +92,8 @@ router.post('/:id/approve',
         user: req.user.id,
         company: req.companyId,
         action: 'approve',
-        resource_type: 'Supplier',
-        resource_id: supplier._id,
+        entity_type: 'Supplier',
+        entity_id: supplier._id,
         description: `Aprobó el tercero: ${supplier.legal_name}`,
         ip_address: req.ip
       });
@@ -142,10 +141,11 @@ router.post('/:id/reject',
         });
       }
 
-      // Rechazar el tercero
+      // Rechazar el tercero y mantenerlo inactivo
       supplier.approval_status = 'rejected';
       supplier.rejection_reason = rejection_reason.trim();
       supplier.rejected_at = new Date();
+      supplier.active = false; // Mantener inactivo al rechazar
       supplier.approved_by = req.user.id; // Guarda quién rechazó
       supplier.updated_by = req.user.id;
       await supplier.save();
@@ -155,8 +155,8 @@ router.post('/:id/reject',
         user: req.user.id,
         company: req.companyId,
         action: 'reject',
-        resource_type: 'Supplier',
-        resource_id: supplier._id,
+        entity_type: 'Supplier',
+        entity_id: supplier._id,
         description: `Rechazó el tercero: ${supplier.legal_name}. Razón: ${rejection_reason}`,
         ip_address: req.ip
       });
@@ -186,8 +186,7 @@ router.get('/stats',
       const stats = await Supplier.aggregate([
         {
           $match: {
-            company: req.companyId,
-            active: true
+            company: req.companyId
           }
         },
         {

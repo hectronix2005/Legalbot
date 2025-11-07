@@ -13,16 +13,33 @@ router.get('/',
     try {
       const filter = { active: true };
 
-      // Si es super_admin con ALL, devolver todas las categorías activas
-      // Si no, filtrar por companyId
+      // Super admin con ALL ve todas, otros usuarios ven solo las de su empresa o genéricas
       if (req.user.role !== 'super_admin' && req.companyId && req.companyId !== 'ALL') {
-        filter.company = req.companyId;
+        filter.$or = [
+          { isGeneric: true }, // Categorías genéricas (aplican a todas las empresas)
+          { companies: req.companyId }, // Categorías específicas de su empresa
+          { company: req.companyId } // DEPRECATED: Compatibilidad con versión anterior
+        ];
+      } else if (req.companyId && req.companyId !== 'ALL') {
+        // Super admin con companyId específico
+        filter.$or = [
+          { isGeneric: true },
+          { companies: req.companyId },
+          { company: req.companyId }
+        ];
       }
+      // Si req.companyId es 'ALL' o null (super_admin sin companyId), no se filtra
+
+      console.log('🔍 Filtro de categorías:', JSON.stringify(filter));
+      console.log('👤 Usuario:', req.user.role, 'CompanyId:', req.companyId);
 
       const categories = await ContractCategory.find(filter)
         .populate('template', 'name')
         .populate('created_by', 'name email')
+        .populate('companies', 'name')
         .sort({ name: 1 });
+
+      console.log(`✅ Encontradas ${categories.length} categorías`);
 
       res.json(categories);
     } catch (error) {
@@ -40,8 +57,8 @@ router.get('/:id',
     try {
       const filter = { _id: req.params.id };
 
-      // Si no es super_admin, filtrar por companyId
-      if (req.user.role !== 'super_admin' && req.companyId && req.companyId !== 'ALL') {
+      // Si tiene companyId específico (no 'ALL'), filtrar por empresa
+      if (req.companyId && req.companyId !== 'ALL') {
         filter.company = req.companyId;
       }
 

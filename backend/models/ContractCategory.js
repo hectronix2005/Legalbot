@@ -86,12 +86,22 @@ const contractCategorySchema = new mongoose.Schema({
   },
 
   // Multi-tenant
+  isGeneric: {
+    type: Boolean,
+    default: false,
+    description: 'Si la categoría aplica para todas las empresas (genérico)'
+  },
+  companies: {
+    type: [mongoose.Schema.Types.ObjectId],
+    ref: 'Company',
+    default: [],
+    description: 'Empresas que pueden usar esta categoría (vacío si isGeneric=true)'
+  },
   company: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Company',
-    required: true,
     index: true,
-    description: 'Empresa a la que pertenece la categoría'
+    description: 'DEPRECATED: Usar isGeneric y companies en su lugar. Se mantiene por compatibilidad'
   },
 
   // Estado
@@ -132,7 +142,9 @@ const contractCategorySchema = new mongoose.Schema({
 
 // Índices
 contractCategorySchema.index({ company: 1, active: 1 });
-contractCategorySchema.index({ company: 1, name: 1 }, { unique: true });
+contractCategorySchema.index({ isGeneric: 1 });
+contractCategorySchema.index({ companies: 1 });
+contractCategorySchema.index({ name: 1 });
 
 // Método para validar respuestas del cuestionario
 contractCategorySchema.methods.validateAnswers = function(answers) {

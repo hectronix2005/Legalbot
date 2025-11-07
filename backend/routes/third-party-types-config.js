@@ -11,11 +11,13 @@ router.get('/', authenticate, async (req, res) => {
   try {
     const filter = { active: true };
 
-    // Super admin ve todos, otros usuarios ven solo los de su empresa o globales
+    // Super admin ve todos, otros usuarios ven solo los de su empresa o genéricos
     if (req.user.role !== 'super_admin' && req.companyId) {
       filter.$or = [
-        { company: req.companyId },
-        { company: null } // Tipos globales
+        { isGeneric: true }, // Tipos genéricos (aplican a todas las empresas)
+        { companies: req.companyId }, // Tipos específicos de su empresa
+        { company: req.companyId }, // DEPRECATED: Compatibilidad con versión anterior
+        { company: null } // DEPRECATED: Compatibilidad con versión anterior
       ];
     }
 
@@ -25,6 +27,7 @@ router.get('/', authenticate, async (req, res) => {
     const types = await ThirdPartyTypeConfig.find(filter)
       .populate('created_by', 'name email')
       .populate('company', 'name')
+      .populate('companies', 'name')
       .sort({ code: 1 });
 
     console.log('✅ [DEBUG /third-party-types] Types found:', types.length);
@@ -42,7 +45,8 @@ router.get('/:id', authenticate, async (req, res) => {
   try {
     const type = await ThirdPartyTypeConfig.findById(req.params.id)
       .populate('created_by', 'name email')
-      .populate('company', 'name');
+      .populate('company', 'name')
+      .populate('companies', 'name');
 
     if (!type) {
       return res.status(404).json({ error: 'Tipo de tercero no encontrado' });
@@ -50,7 +54,17 @@ router.get('/:id', authenticate, async (req, res) => {
 
     // Verificar permisos
     if (req.user.role !== 'super_admin') {
-      if (type.company && type.company._id.toString() !== req.companyId) {
+      // Si es genérico, todos pueden verlo
+      if (type.isGeneric) {
+        return res.json(type);
+      }
+
+      // Si tiene empresas específicas, verificar si el usuario pertenece a una de ellas
+      const userCompanyId = req.companyId?.toString();
+      const hasAccess = type.companies.some(c => c._id.toString() === userCompanyId) ||
+                       (type.company && type.company._id.toString() === userCompanyId); // Compatibilidad
+
+      if (!hasAccess) {
         return res.status(403).json({ error: 'No tienes permiso para ver este tipo' });
       }
     }
@@ -65,7 +79,7 @@ router.get('/:id', authenticate, async (req, res) => {
 // Crear nuevo tipo de tercero
 router.post('/',
   authenticate,
-  authorize('admin', 'super_admin'),
+  authorize('admin', 'super_admin', 'lawyer'),
   [
     body('code').notEmpty().withMessage('El código es requerido'),
     body('label').notEmpty().withMessage('El nombre es requerido'),
@@ -78,24 +92,43 @@ router.post('/',
         return res.status(400).json({ errors: errors.array() });
       }
 
-      const { code, label, description, icon, fields, default_identification_types, is_system, company } = req.body;
+      const {
+        code, label, description, icon, fields, default_identification_types,
+        is_system, isGeneric, companies, company
+      } = req.body;
 
-      console.log('📝 [POST /third-party-types] Creating type with data:', { code, label, default_identification_types: default_identification_types?.length });
+      console.log('📝 [POST /third-party-types] Creating type with data:', {
+        code, label, isGeneric, companies: companies?.length,
+        default_identification_types: default_identification_types?.length
+      });
 
-      // Verificar si ya existe
+      // Verificar si ya existe un tipo con el mismo código
       const existing = await ThirdPartyTypeConfig.findOne({
-        code: code.toLowerCase(),
-        company: company || null
+        code: code.toLowerCase()
       });
 
       if (existing) {
         return res.status(400).json({ error: 'Ya existe un tipo con ese código' });
       }
 
-      // Solo super admin puede crear tipos del sistema o globales
-      if ((is_system || !company) && req.user.role !== 'super_admin') {
+      // Solo super admin y admin pueden crear tipos genéricos
+      if (isGeneric && req.user.role !== 'super_admin' && req.user.role !== 'admin') {
         return res.status(403).json({
-          error: 'Solo el super admin puede crear tipos del sistema o globales'
+          error: 'Solo Super Admin y Admin pueden crear tipos genéricos'
+        });
+      }
+
+      // Solo super admin puede crear tipos del sistema
+      if (is_system && req.user.role !== 'super_admin') {
+        return res.status(403).json({
+          error: 'Solo el super admin puede crear tipos del sistema'
+        });
+      }
+
+      // Validar que si no es genérico, se proporcionen empresas
+      if (!isGeneric && (!companies || companies.length === 0)) {
+        return res.status(400).json({
+          error: 'Debes seleccionar al menos una empresa o marcar el tipo como genérico'
         });
       }
 
@@ -107,13 +140,16 @@ router.post('/',
         fields: fields || [],
         default_identification_types: default_identification_types || [],
         is_system: is_system || false,
-        company: company || null,
+        isGeneric: isGeneric || false,
+        companies: isGeneric ? [] : (companies || []),
+        company: company || null, // Mantener por compatibilidad
         created_by: req.user.id
       };
 
-      console.log('💾 [POST /third-party-types] Saving type with default_identification_types:', typeData.default_identification_types);
+      console.log('💾 [POST /third-party-types] Saving type:', typeData);
 
       const newType = await ThirdPartyTypeConfig.create(typeData);
+      await newType.populate('companies', 'name');
 
       res.status(201).json({
         message: 'Tipo de tercero creado exitosamente',
@@ -129,7 +165,7 @@ router.post('/',
 // Actualizar tipo de tercero
 router.put('/:id',
   authenticate,
-  authorize('admin', 'super_admin'),
+  authorize('admin', 'super_admin', 'lawyer'),
   async (req, res) => {
     try {
       const type = await ThirdPartyTypeConfig.findById(req.params.id);
@@ -145,15 +181,46 @@ router.put('/:id',
         });
       }
 
-      if (req.user.role !== 'super_admin') {
-        if (type.company && type.company.toString() !== req.companyId) {
+      // Verificar permisos para tipos no genéricos
+      if (req.user.role !== 'super_admin' && !type.isGeneric) {
+        const userCompanyId = req.companyId?.toString();
+
+        // Si el tipo no tiene empresas asignadas (legacy), permitir edición a admins
+        const hasNoCompanies = (!type.companies || type.companies.length === 0) && !type.company;
+
+        // Verificar si el usuario tiene acceso a este tipo
+        const hasAccess = hasNoCompanies ||
+                         type.companies.some(c => c.toString() === userCompanyId) ||
+                         (type.company && type.company.toString() === userCompanyId);
+
+        if (!hasAccess) {
           return res.status(403).json({ error: 'No tienes permiso para modificar este tipo' });
         }
       }
 
-      const { label, description, icon, fields, default_identification_types, active } = req.body;
+      const { label, description, icon, fields, default_identification_types, active, isGeneric, companies } = req.body;
 
-      console.log('✏️ [PUT /third-party-types] Updating type with data:', { label, default_identification_types: default_identification_types?.length });
+      console.log('✏️ [PUT /third-party-types] Updating type with data:', {
+        label, isGeneric, companies: companies?.length,
+        default_identification_types: default_identification_types?.length
+      });
+
+      // Solo super admin y admin pueden modificar el flag isGeneric
+      if (isGeneric !== undefined && req.user.role !== 'super_admin' && req.user.role !== 'admin') {
+        return res.status(403).json({
+          error: 'Solo Super Admin y Admin pueden modificar el tipo genérico'
+        });
+      }
+
+      // Validar que si no es genérico, se proporcionen empresas
+      const newIsGeneric = isGeneric !== undefined ? isGeneric : type.isGeneric;
+      const newCompanies = companies !== undefined ? companies : type.companies;
+
+      if (!newIsGeneric && (!newCompanies || newCompanies.length === 0)) {
+        return res.status(400).json({
+          error: 'Debes seleccionar al menos una empresa o marcar el tipo como genérico'
+        });
+      }
 
       // Actualizar campos
       if (label) type.label = label;
@@ -165,9 +232,13 @@ router.put('/:id',
         console.log('💾 [PUT /third-party-types] Updated default_identification_types:', default_identification_types);
       }
       if (active !== undefined) type.active = active;
+      if (isGeneric !== undefined) type.isGeneric = isGeneric;
+      if (companies !== undefined) type.companies = isGeneric ? [] : companies;
+
       type.updated_by = req.user.id;
 
       await type.save();
+      await type.populate('companies', 'name');
 
       res.json({
         message: 'Tipo de tercero actualizado exitosamente',
@@ -183,7 +254,7 @@ router.put('/:id',
 // Eliminar tipo de tercero (solo si no es del sistema)
 router.delete('/:id',
   authenticate,
-  authorize('admin', 'super_admin'),
+  authorize('admin', 'super_admin', 'lawyer'),
   async (req, res) => {
     try {
       const type = await ThirdPartyTypeConfig.findById(req.params.id);
@@ -233,6 +304,21 @@ router.get('/config/field-options', authenticate, (req, res) => {
   });
 });
 
+// Obtener lista de empresas (solo para Super Admin y Admin)
+router.get('/config/companies', authenticate, authorize('admin', 'super_admin'), async (req, res) => {
+  try {
+    const Company = require('../models/Company');
+    const companies = await Company.find({ active: true })
+      .select('_id name tax_id')
+      .sort({ name: 1 });
+
+    res.json(companies);
+  } catch (error) {
+    console.error('Error al obtener empresas:', error);
+    res.status(500).json({ error: 'Error al obtener empresas' });
+  }
+});
+
 // Analizar variables de plantilla y sugerir configuración de campos
 router.post('/suggest-from-template',
   authenticate,
@@ -277,7 +363,7 @@ router.post('/suggest-from-template',
 // Actualizar configuración de tipo de tercero con campos sugeridos
 router.put('/:typeId/apply-suggested-fields',
   authenticate,
-  authorize('admin', 'super_admin'),
+  authorize('admin', 'super_admin', 'lawyer'),
   async (req, res) => {
     try {
       const { typeId } = req.params;
