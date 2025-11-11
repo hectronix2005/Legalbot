@@ -41,11 +41,14 @@ interface Supplier {
   _id: string;
   identification_type: string;
   identification_number: string;
+  id_issue_city?: string;
   legal_name: string;
   legal_name_short: string;
   legal_representative_name: string;
   legal_representative_id_type: string;
   legal_representative_id_number: string;
+  full_name?: string;
+  licensee_name?: string;
   email?: string;
   phone?: string;
   address?: string;
@@ -611,7 +614,24 @@ const UnifiedTemplates: React.FC = () => {
       // Cédula representante
       'cedula': supplier.legal_representative_id_number,
       'cedula_representante': supplier.legal_representative_id_number,
+      'cedularepresentante': supplier.legal_representative_id_number,
+      'cedula_rep_legal': supplier.legal_representative_id_number,
+      'cedulareplegal': supplier.legal_representative_id_number,
+      'cedula_representante_legal': supplier.legal_representative_id_number,
+      'cedularepresentantelegal': supplier.legal_representative_id_number,
       'legal_representative_id_number': supplier.legal_representative_id_number,
+
+      // Ciudad de expedición cédula
+      'ciudad_expedicion': supplier.id_issue_city || '',
+      'ciudad_de_expedicion': supplier.id_issue_city || '',
+      'ciudaddeexpedicion': supplier.id_issue_city || '',
+      'ciudad_expedicion_cedula': supplier.id_issue_city || '',
+      'ciudad_de_expedicion_cedula': supplier.id_issue_city || '',
+      'ciudad_de_expedicion_cedula_rep_legal': supplier.id_issue_city || '',
+      'ciudaddeexpedicioncedulareplegal': supplier.id_issue_city || '',
+      'lugar_expedicion': supplier.id_issue_city || '',
+      'lugarexpedicion': supplier.id_issue_city || '',
+      'id_issue_city': supplier.id_issue_city || '',
 
       // Correo electrónico
       'correo_electronico': supplier.email || '',
@@ -621,6 +641,12 @@ const UnifiedTemplates: React.FC = () => {
       'email': supplier.email || '',
       'e-mail': supplier.email || '',
       'e_mail': supplier.email || '',
+      'email_licenciatario': supplier.email || '',
+      'e-mail_licenciatario': supplier.email || '',
+      'emaillicenciatario': supplier.email || '',
+      'e_mail_licenciatario': supplier.email || '',
+      'correo_licenciatario': supplier.email || '',
+      'correolicenciatario': supplier.email || '',
 
       // Teléfono
       'telefono': supplier.phone || '',
@@ -635,8 +661,22 @@ const UnifiedTemplates: React.FC = () => {
       'city': supplier.city || '',
       'ciudad_de_domicilio': supplier.city || '',
 
+      // Nombre del licenciatario / full_name
+      'nombre_licenciatario': supplier.licensee_name || supplier.full_name || '',
+      'nombrelicenciatario': supplier.licensee_name || supplier.full_name || '',
+      'nombre_del_licenciatario': supplier.licensee_name || supplier.full_name || '',
+      'nombredellicenciatario': supplier.licensee_name || supplier.full_name || '',
+      'licenciatario': supplier.licensee_name || supplier.full_name || '',
+      'licensee_name': supplier.licensee_name || '',
+      'full_name': supplier.full_name || '',
+
       // Fecha
-      'fecha': new Date().toLocaleDateString('es-ES')
+      'fecha': new Date().toLocaleDateString('es-ES'),
+      'dia_mes_y_ano': new Date().toLocaleDateString('es-ES'),
+      'día_mes_y_año': new Date().toLocaleDateString('es-ES'),
+      'diamesy ano': new Date().toLocaleDateString('es-ES'),
+      'dia,_mes_y_ano': new Date().toLocaleDateString('es-ES'),
+      'día,_mes_y_año': new Date().toLocaleDateString('es-ES')
     };
 
     // Fix para TypeScript: Agregar campos personalizados del tercero (custom_fields)
