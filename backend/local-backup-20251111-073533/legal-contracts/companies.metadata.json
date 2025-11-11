@@ -1,0 +1,1 @@
+{"indexes":[{"v":{"$numberInt":"2"},"key":{"_id":{"$numberInt":"1"}},"name":"_id_"},{"v":{"$numberInt":"2"},"key":{"tax_id":{"$numberInt":"1"}},"name":"tax_id_1","background":true,"unique":true}],"uuid":"8677bbaf8b264159b7baea656bb8e7c1","collectionName":"companies","type":"collection"}

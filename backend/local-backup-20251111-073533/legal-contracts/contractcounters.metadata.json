@@ -1,0 +1,1 @@
+{"indexes":[{"v":{"$numberInt":"2"},"key":{"_id":{"$numberInt":"1"}},"name":"_id_"},{"v":{"$numberInt":"2"},"key":{"company":{"$numberInt":"1"},"year":{"$numberInt":"1"}},"name":"company_1_year_1","background":true,"unique":true}],"uuid":"053dee6d2961438fbb1ab15e76398719","collectionName":"contractcounters","type":"collection"}

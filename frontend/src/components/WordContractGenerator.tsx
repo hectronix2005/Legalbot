@@ -73,10 +73,23 @@ const WordContractGenerator: React.FC<WordContractGeneratorProps> = ({ onContrac
   const fetchSuppliers = async () => {
     setLoadingSuppliers(true);
     try {
+      console.log('🔍 [WordContractGenerator] Fetching suppliers...');
       const response = await api.get('/suppliers');
-      setSuppliers(response.data);
-    } catch (error) {
-      console.error('Error fetching suppliers:', error);
+      console.log('✅ [WordContractGenerator] Suppliers fetched:', response.data);
+
+      // Asegurar que response.data es un array
+      if (Array.isArray(response.data)) {
+        setSuppliers(response.data);
+      } else if (response.data && Array.isArray(response.data.suppliers)) {
+        setSuppliers(response.data.suppliers);
+      } else {
+        console.error('⚠️ [WordContractGenerator] Unexpected response format:', response.data);
+        setSuppliers([]);
+      }
+    } catch (error: any) {
+      console.error('❌ [WordContractGenerator] Error fetching suppliers:', error);
+      console.error('Error details:', error.response?.data);
+      setSuppliers([]);
     } finally {
       setLoadingSuppliers(false);
     }
@@ -186,29 +199,45 @@ const WordContractGenerator: React.FC<WordContractGeneratorProps> = ({ onContrac
   };
 
   const handleSupplierSelect = (supplierId: string) => {
+    console.log('🔍 [handleSupplierSelect] Called with supplierId:', supplierId);
+
     if (!supplierId) {
+      console.log('⚠️ [handleSupplierSelect] No supplier ID provided, clearing selection');
       setSelectedSupplier(null);
       return;
     }
 
     const supplier = suppliers.find(s => s._id === supplierId);
+    console.log('🔍 [handleSupplierSelect] Found supplier:', supplier ? supplier.legal_name || supplier.full_name : 'NOT FOUND');
+    console.log('🔍 [handleSupplierSelect] Selected template:', selectedTemplate ? selectedTemplate.name : 'NO TEMPLATE');
+
     if (!supplier || !selectedTemplate) {
+      console.error('❌ [handleSupplierSelect] Missing supplier or template');
       return;
     }
 
     setSelectedSupplier(supplier);
+    console.log('✅ [handleSupplierSelect] Supplier set:', supplier.legal_name || supplier.full_name);
 
     // Auto-fill form data with supplier information
     const newFormData: Record<string, any> = { ...formData };
+    console.log('🔍 [handleSupplierSelect] Template fields count:', selectedTemplate.fields.length);
 
+    let matchedFieldsCount = 0;
     selectedTemplate.fields.forEach(field => {
       const matchedValue = findMatchingSupplierField(field.name, supplier);
+      console.log(`  📋 Field "${field.name}" -> ${matchedValue !== null ? `"${matchedValue}"` : 'NO MATCH'}`);
+
       if (matchedValue !== null) {
         newFormData[field.name] = matchedValue;
+        matchedFieldsCount++;
       }
     });
 
+    console.log(`✅ [handleSupplierSelect] Matched ${matchedFieldsCount}/${selectedTemplate.fields.length} fields`);
+    console.log('🔍 [handleSupplierSelect] New form data:', newFormData);
     setFormData(newFormData);
+    console.log('✅ [handleSupplierSelect] Form data updated');
   };
 
   const handleInputChange = (fieldName: string, value: any) => {

@@ -22,6 +22,30 @@ interface Template {
   fields: TemplateField[];
 }
 
+interface Supplier {
+  _id: string;
+  identification_type: string;
+  identification_number: string;
+  id_issue_city?: string;
+  legal_name?: string;
+  legal_name_short?: string;
+  legal_representative_name?: string;
+  legal_representative_id_type?: string;
+  legal_representative_id_number?: string;
+  full_name?: string;
+  licensee_name?: string;
+  email?: string;
+  phone?: string;
+  address?: string;
+  city?: string;
+  country?: string;
+  company: string;
+  third_party_type?: string;
+  custom_fields?: Record<string, any>;
+  active: boolean;
+  approval_status: string;
+}
+
 interface ContractData {
   [key: string]: string;
 }
@@ -37,6 +61,9 @@ const ContractGenerator: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string>('');
   const [allFieldsFilled, setAllFieldsFilled] = useState(false);
+  const [suppliers, setSuppliers] = useState<Supplier[]>([]);
+  const [selectedSupplier, setSelectedSupplier] = useState<Supplier | null>(null);
+  const [loadingSuppliers, setLoadingSuppliers] = useState(false);
   
   // Wrapper para setAllFieldsFilled con logging
   const setAllFieldsFilledWithLog = (value: boolean) => {
@@ -59,7 +86,33 @@ const ContractGenerator: React.FC = () => {
     };
 
     fetchTemplates();
+    fetchSuppliers();
   }, []);
+
+  const fetchSuppliers = async () => {
+    setLoadingSuppliers(true);
+    try {
+      console.log('🔍 [ContractGenerator] Fetching suppliers...');
+      const response = await api.get('/suppliers');
+      console.log('✅ [ContractGenerator] Suppliers fetched:', response.data);
+
+      // Asegurar que response.data es un array
+      if (Array.isArray(response.data)) {
+        setSuppliers(response.data);
+      } else if (response.data && Array.isArray(response.data.suppliers)) {
+        setSuppliers(response.data.suppliers);
+      } else {
+        console.error('⚠️ [ContractGenerator] Unexpected response format:', response.data);
+        setSuppliers([]);
+      }
+    } catch (error: any) {
+      console.error('❌ [ContractGenerator] Error fetching suppliers:', error);
+      console.error('Error details:', error.response?.data);
+      setSuppliers([]);
+    } finally {
+      setLoadingSuppliers(false);
+    }
+  };
 
   // Función auxiliar para remover acentos (necesaria antes de useEffect)
   const removeAccentsHelper = (str: string): string => {
@@ -148,6 +201,146 @@ const ContractGenerator: React.FC = () => {
     }
   });
 
+  // Función para normalizar nombres de campo para matching con terceros
+  const normalizeFieldNameForMatching = (fieldName: string): string => {
+    return fieldName
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '') // Remove accents
+      .replace(/[^a-z0-9]/g, ''); // Remove special characters
+  };
+
+  const findMatchingSupplierField = (templateFieldName: string, supplier: Supplier): any => {
+    const normalizedTemplateField = normalizeFieldNameForMatching(templateFieldName);
+
+    // Direct mapping dictionary with common variations
+    const fieldMappings: Record<string, string[]> = {
+      // Email
+      'email': ['email', 'correo', 'correelectronico', 'mail'],
+      // Phone
+      'telefono': ['phone', 'telefono', 'celular', 'movil', 'tel'],
+      'phone': ['phone', 'telefono', 'celular', 'movil', 'tel'],
+      // Address
+      'direccion': ['address', 'direccion', 'domicilio'],
+      'address': ['address', 'direccion', 'domicilio'],
+      // City
+      'ciudad': ['city', 'ciudad', 'municipio'],
+      'city': ['city', 'ciudad', 'municipio'],
+      // Country
+      'pais': ['country', 'pais', 'nacion'],
+      'country': ['country', 'pais', 'nacion'],
+      // Identification
+      'identificacion': ['identification_number', 'identificacion', 'nit', 'cedula', 'documento', 'nrodocumento'],
+      'nit': ['identification_number', 'identificacion', 'nit'],
+      'cedula': ['identification_number', 'identificacion', 'cedula'],
+      'documento': ['identification_number', 'identificacion', 'documento'],
+      // Identification type
+      'tipodocumento': ['identification_type', 'tipodocumento', 'tipoidentificacion'],
+      'tipoidentificacion': ['identification_type', 'tipodocumento', 'tipoidentificacion'],
+      // Names
+      'nombre': ['full_name', 'legal_name', 'nombre', 'nombreCompleto', 'razonsocial'],
+      'razonsocial': ['legal_name', 'razonsocial', 'nombre', 'nombreCompleto'],
+      'nombreempresa': ['legal_name', 'legal_name_short', 'nombreempresa', 'empresa'],
+      'empresa': ['legal_name', 'legal_name_short', 'nombreempresa', 'empresa'],
+      // Legal representative
+      'representantelegal': ['legal_representative_name', 'representantelegal', 'representante'],
+      'representante': ['legal_representative_name', 'representantelegal', 'representante'],
+      'cedularepresentante': ['legal_representative_id_number', 'cedularepresentante', 'documentorepresentante'],
+      'documentorepresentante': ['legal_representative_id_number', 'cedularepresentante', 'documentorepresentante'],
+      'tipoiddrepresentante': ['legal_representative_id_type', 'tipoiddrepresentante'],
+      // City of issue
+      'ciudadexpedicion': ['id_issue_city', 'ciudadexpedicion', 'lugarexpedicion'],
+      'lugarexpedicion': ['id_issue_city', 'ciudadexpedicion', 'lugarexpedicion'],
+    };
+
+    // First check direct field mappings
+    for (const [key, variations] of Object.entries(fieldMappings)) {
+      const normalizedKey = normalizeFieldNameForMatching(key);
+      if (normalizedTemplateField.includes(normalizedKey) || normalizedKey.includes(normalizedTemplateField)) {
+        for (const variation of variations) {
+          const supplierValue = (supplier as any)[variation];
+          if (supplierValue !== undefined && supplierValue !== null && supplierValue !== '') {
+            return supplierValue;
+          }
+        }
+      }
+    }
+
+    // Then try direct field name match in supplier
+    const supplierFields = Object.keys(supplier);
+    for (const supplierField of supplierFields) {
+      const normalizedSupplierField = normalizeFieldNameForMatching(supplierField);
+
+      // Check if fields match or contain each other
+      if (normalizedTemplateField === normalizedSupplierField ||
+          normalizedTemplateField.includes(normalizedSupplierField) ||
+          normalizedSupplierField.includes(normalizedTemplateField)) {
+        const value = (supplier as any)[supplierField];
+        if (value !== undefined && value !== null && value !== '') {
+          return value;
+        }
+      }
+    }
+
+    // Check custom fields if they exist
+    if (supplier.custom_fields) {
+      for (const [customFieldKey, customFieldValue] of Object.entries(supplier.custom_fields)) {
+        const normalizedCustomField = normalizeFieldNameForMatching(customFieldKey);
+        if (normalizedTemplateField === normalizedCustomField ||
+            normalizedTemplateField.includes(normalizedCustomField) ||
+            normalizedCustomField.includes(normalizedTemplateField)) {
+          if (customFieldValue !== undefined && customFieldValue !== null && customFieldValue !== '') {
+            return customFieldValue;
+          }
+        }
+      }
+    }
+
+    return null;
+  };
+
+  const handleSupplierSelect = (supplierId: string) => {
+    console.log('🔍 [handleSupplierSelect] Called with supplierId:', supplierId);
+
+    if (!supplierId) {
+      console.log('⚠️ [handleSupplierSelect] No supplier ID provided, clearing selection');
+      setSelectedSupplier(null);
+      return;
+    }
+
+    const supplier = suppliers.find(s => s._id === supplierId);
+    console.log('🔍 [handleSupplierSelect] Found supplier:', supplier ? supplier.legal_name || supplier.full_name : 'NOT FOUND');
+    console.log('🔍 [handleSupplierSelect] Selected template:', selectedTemplate ? selectedTemplate.name : 'NO TEMPLATE');
+
+    if (!supplier || !selectedTemplate) {
+      console.error('❌ [handleSupplierSelect] Missing supplier or template');
+      return;
+    }
+
+    setSelectedSupplier(supplier);
+    console.log('✅ [handleSupplierSelect] Supplier set:', supplier.legal_name || supplier.full_name);
+
+    // Auto-fill form data with supplier information
+    const newContractData: Record<string, any> = { ...contractData };
+    console.log('🔍 [handleSupplierSelect] Template fields count:', selectedTemplate.fields.length);
+
+    let matchedFieldsCount = 0;
+    selectedTemplate.fields.forEach(field => {
+      const matchedValue = findMatchingSupplierField(field.field_name, supplier);
+      console.log(`  📋 Field "${field.field_name}" -> ${matchedValue !== null ? `"${matchedValue}"` : 'NO MATCH'}`);
+
+      if (matchedValue !== null) {
+        newContractData[field.field_name] = matchedValue;
+        matchedFieldsCount++;
+      }
+    });
+
+    console.log(`✅ [handleSupplierSelect] Matched ${matchedFieldsCount}/${selectedTemplate.fields.length} fields`);
+    console.log('🔍 [handleSupplierSelect] New contract data:', newContractData);
+    setContractData(newContractData);
+    console.log('✅ [handleSupplierSelect] Contract data updated');
+  };
+
   // Manejar selección de plantilla
   const handleTemplateSelect = (template: Template) => {
     setSelectedTemplate(template);
@@ -157,13 +350,14 @@ const ContractGenerator: React.FC = () => {
     setGeneratedContractNumber('');
     setWordFile('');
     setError('');
-    
+    setSelectedSupplier(null); // Reset supplier selection when changing template
+
     // Inicializar datos del contrato con valores vacíos para TODOS los campos
     const initialData: ContractData = {};
-    
+
     // Usar un Set para evitar campos duplicados
     const uniqueFieldNames = new Set<string>();
-    
+
     template.fields.forEach(field => {
       const fieldName = field.field_name;
       if (!uniqueFieldNames.has(fieldName)) {
@@ -171,12 +365,12 @@ const ContractGenerator: React.FC = () => {
         initialData[fieldName] = '';
       }
     });
-    
+
     console.log('📝 Inicializando datos de plantilla:');
     console.log('  - Total fields in template:', template.fields.length);
     console.log('  - Unique field names:', uniqueFieldNames.size);
     console.log('  - Field names:', Array.from(uniqueFieldNames));
-    
+
     setContractData(initialData);
   };
 
@@ -467,7 +661,43 @@ const ContractGenerator: React.FC = () => {
       {selectedTemplate && (
         <div className="contract-form">
           <h3>2. Completar Información</h3>
-          
+
+          {/* Selector de Terceros */}
+          <div className="supplier-selector-section">
+            <div className="field-group">
+              <label className="field-label">
+                Seleccionar Tercero (Opcional)
+                <span className="field-hint"> - Prellena automáticamente los campos del formulario</span>
+              </label>
+              <select
+                value={selectedSupplier?._id || ''}
+                onChange={(e) => handleSupplierSelect(e.target.value)}
+                className="form-input supplier-select"
+                disabled={loadingSuppliers}
+              >
+                <option value="">-- Seleccionar tercero existente --</option>
+                {suppliers.map(supplier => {
+                  const displayName = supplier.legal_name || supplier.full_name || supplier.identification_number;
+                  const displayId = supplier.identification_number;
+                  return (
+                    <option key={supplier._id} value={supplier._id}>
+                      {displayName} ({displayId})
+                    </option>
+                  );
+                })}
+              </select>
+              {loadingSuppliers && <p className="loading-text">Cargando terceros...</p>}
+              {selectedSupplier && (
+                <div className="selected-supplier-info">
+                  <p className="info-text">
+                    Tercero seleccionado: <strong>{selectedSupplier.legal_name || selectedSupplier.full_name}</strong>
+                  </p>
+                  <p className="info-subtext">Los campos se han prellenado automáticamente. Puedes modificarlos si es necesario.</p>
+                </div>
+              )}
+            </div>
+          </div>
+
           {/* Campos únicos */}
           <div className="form-section">
             <h4>Información Principal</h4>
