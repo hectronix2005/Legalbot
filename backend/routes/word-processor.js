@@ -588,7 +588,7 @@ function detectVariablesFromText(plainText, thirdPartyType = 'otro') {
           original_marker: variableText, // MANTENER EXACTO CON ESPACIOS
           name: autoName, // field_name normalizado: "razon_social"
           field_name: autoName, // field_name normalizado: "razon_social"
-          field_label: suggestion.label || variableText, // Usar etiqueta sugerida o variable original
+          field_label: variableText, // SIEMPRE usar el marker original, nunca suggestion.label
           field_type: fieldType,
           required: suggestion.required !== undefined ? suggestion.required : true,
           description: `Variable detectada: ${variableText}`,

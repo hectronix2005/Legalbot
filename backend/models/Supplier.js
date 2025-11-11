@@ -5,7 +5,7 @@ const supplierSchema = new mongoose.Schema({
   identification_type: {
     type: String,
     required: true,
-    enum: ['NIT', 'NIT (PH)', 'CC', 'CE', 'Pasaporte', 'RUT', 'Otro'],
+    enum: ['NIT', 'CC', 'CE', 'Pasaporte', 'RUT', 'Otro'],
     description: 'Tipo de identificación del proveedor'
   },
   identification_number: {
@@ -22,35 +22,37 @@ const supplierSchema = new mongoose.Schema({
   },
   legal_name: {
     type: String,
-    required: true,
     trim: true,
-    description: 'Razón social completa del proveedor / Nombre completo'
+    description: 'Razón social completa del proveedor (para empresas) / Nombre completo (para personas naturales)'
   },
   legal_name_short: {
     type: String,
-    required: true,
     trim: true,
-    description: 'Razón social abreviada'
+    description: 'Razón social abreviada (solo para empresas)'
   },
 
-  // Información del representante legal
+  // Información del representante legal (solo para empresas)
   legal_representative_name: {
     type: String,
-    required: true,
     trim: true,
-    description: 'Nombre completo del representante legal'
+    description: 'Nombre completo del representante legal (solo para empresas)'
   },
   legal_representative_id_type: {
     type: String,
-    required: true,
     enum: ['CC', 'CE', 'Pasaporte', 'Otro'],
-    description: 'Tipo de identificación del representante legal'
+    description: 'Tipo de identificación del representante legal (solo para empresas)'
   },
   legal_representative_id_number: {
     type: String,
-    required: true,
     trim: true,
-    description: 'Número de identificación del representante legal'
+    description: 'Número de identificación del representante legal (solo para empresas)'
+  },
+
+  // Nombre completo para personas naturales
+  full_name: {
+    type: String,
+    trim: true,
+    description: 'Nombre completo de la persona natural (empleados, clientes personas, etc.)'
   },
 
   // Información adicional para Propiedad Horizontal

@@ -153,6 +153,8 @@ router.get('/:id/check-references', authenticate, verifyTenant, async (req, res)
 // Obtener un proveedor específico
 router.get('/:id', authenticate, verifyTenant, async (req, res) => {
   try {
+    const { includeSuggestions } = req.query;
+
     const supplier = await Supplier.findOne({
       _id: req.params.id,
       company: req.companyId
@@ -166,34 +168,172 @@ router.get('/:id', authenticate, verifyTenant, async (req, res) => {
       return res.status(404).json({ error: 'Proveedor no encontrado' });
     }
 
-    res.json({
+    const response = {
       success: true,
       supplier
-    });
+    };
+
+    // Si se solicitan sugerencias, analizar plantillas automáticamente
+    if (includeSuggestions === 'true' && supplier.third_party_type) {
+      try {
+        // Construir lista de campos actuales del tercero
+        const supplierFields = new Set();
+
+        // Campos estándar
+        if (supplier.legal_name) supplierFields.add('razon_social');
+        if (supplier.legal_name_short) supplierFields.add('razon_social_corta');
+        if (supplier.full_name) supplierFields.add('nombre_completo');
+        if (supplier.identification_type) supplierFields.add('tipo_identificacion');
+        if (supplier.identification_number) supplierFields.add('numero_identificacion');
+        if (supplier.legal_representative_name) supplierFields.add('representante_legal');
+        if (supplier.legal_representative_id_type) supplierFields.add('tipo_id_representante');
+        if (supplier.legal_representative_id_number) supplierFields.add('numero_id_representante');
+        if (supplier.address) supplierFields.add('direccion');
+        if (supplier.city) supplierFields.add('ciudad');
+        if (supplier.country) supplierFields.add('pais');
+        if (supplier.email) supplierFields.add('email');
+        if (supplier.phone) supplierFields.add('telefono');
+
+        // Campos personalizados
+        if (supplier.custom_fields) {
+          Object.keys(supplier.custom_fields).forEach(key => {
+            if (supplier.custom_fields[key]) {
+              supplierFields.add(key);
+            }
+          });
+        }
+
+        // Buscar plantillas que usan este tipo de tercero
+        const templates = await ContractTemplate.find({
+          company: req.companyId,
+          active: true,
+          third_party_type: supplier.third_party_type.code
+        }).select('name category fields');
+
+        const templateSuggestions = [];
+
+        for (const template of templates) {
+          const missingFields = [];
+          const matchedFields = [];
+
+          if (template.fields && Array.isArray(template.fields)) {
+            for (const templateField of template.fields) {
+              const fieldName = templateField.field_name || templateField.name;
+              const fieldLabel = templateField.field_label || templateField.label || fieldName;
+
+              // Verificar si el tercero tiene este campo (coincidencia flexible)
+              let found = false;
+              for (const supplierField of supplierFields) {
+                if (fieldsMatch(supplierField, fieldName)) {
+                  found = true;
+                  matchedFields.push({
+                    field_name: fieldName,
+                    field_label: fieldLabel
+                  });
+                  break;
+                }
+              }
+
+              if (!found) {
+                missingFields.push({
+                  field_name: fieldName,
+                  field_label: fieldLabel,
+                  field_type: templateField.field_type || templateField.type || 'text',
+                  required: templateField.required || false,
+                  description: `Campo requerido por la plantilla ${template.name}`
+                });
+              }
+            }
+          }
+
+          // Solo incluir plantillas con campos faltantes
+          if (missingFields.length > 0) {
+            templateSuggestions.push({
+              template_id: template._id,
+              template_name: template.name,
+              template_category: template.category,
+              missing_fields: missingFields,
+              matched_fields: matchedFields,
+              completion_percentage: Math.round(
+                (matchedFields.length / (matchedFields.length + missingFields.length)) * 100
+              )
+            });
+          }
+        }
+
+        // Ordenar por porcentaje de completitud
+        templateSuggestions.sort((a, b) => b.completion_percentage - a.completion_percentage);
+
+        response.field_suggestions = {
+          current_fields: Array.from(supplierFields),
+          templates_analyzed: templates.length,
+          templates_needing_fields: templateSuggestions.length,
+          suggestions: templateSuggestions
+        };
+      } catch (suggestionError) {
+        console.error('Error al generar sugerencias:', suggestionError);
+        // No fallar la petición, solo omitir sugerencias
+      }
+    }
+
+    res.json(response);
   } catch (error) {
     console.error('Error al obtener proveedor:', error);
     res.status(500).json({ error: 'Error al obtener proveedor' });
   }
 });
 
+// Función auxiliar para comparar nombres de campos (coincidencia flexible)
+function fieldsMatch(supplierFieldName, templateFieldName) {
+  const normalized1 = normalizeFieldName(supplierFieldName);
+  const normalized2 = normalizeFieldName(templateFieldName);
+
+  if (normalized1 === normalized2) return true;
+  if (normalized1.includes(normalized2) || normalized2.includes(normalized1)) {
+    return true;
+  }
+  return false;
+}
+
+function normalizeFieldName(name) {
+  return name
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[_\s\/\-]+/g, '')
+    .replace(/de/g, '').replace(/del/g, '')
+    .replace(/la/g, '').replace(/el/g, '');
+}
+
 // Crear proveedor
 router.post('/',
   authenticate,
   verifyTenant,
   authorize('super_admin', 'admin', 'lawyer'),
-  [
-    body('identification_type').notEmpty().withMessage('El tipo de identificación es requerido'),
-    body('identification_number').notEmpty().withMessage('El número de identificación es requerido'),
-    body('legal_name').notEmpty().withMessage('La razón social es requerida'),
-    body('legal_name_short').notEmpty().withMessage('La razón social abreviada es requerida'),
-    body('legal_representative_name').notEmpty().withMessage('El nombre del representante legal es requerido'),
-    body('legal_representative_id_type').notEmpty().withMessage('El tipo de identificación del representante es requerido'),
-    body('legal_representative_id_number').notEmpty().withMessage('El número de identificación del representante es requerido')
-  ],
   async (req, res) => {
     try {
+      // Validación dinámica basada en el tipo de identificación
+      const isCompany = req.body.identification_type === 'NIT';
+
+      // Validaciones comunes
+      await body('identification_type').notEmpty().withMessage('El tipo de identificación es requerido').run(req);
+      await body('identification_number').notEmpty().withMessage('El número de identificación es requerido').run(req);
+
+      if (isCompany) {
+        // Validaciones para empresas
+        await body('legal_name').notEmpty().withMessage('La razón social es requerida').run(req);
+        await body('legal_name_short').notEmpty().withMessage('La razón social abreviada es requerida').run(req);
+        await body('legal_representative_name').notEmpty().withMessage('El nombre del representante legal es requerido').run(req);
+        await body('legal_representative_id_type').notEmpty().withMessage('El tipo de identificación del representante es requerido').run(req);
+        await body('legal_representative_id_number').notEmpty().withMessage('El número de identificación del representante es requerido').run(req);
+      } else {
+        // Validación para personas naturales
+        await body('full_name').notEmpty().withMessage('El nombre completo es requerido').run(req);
+      }
+
       const errors = validationResult(req);
       if (!errors.isEmpty()) {
+        console.log('❌ Errores de validación:', errors.array());
         return res.status(400).json({ errors: errors.array() });
       }
 
@@ -207,6 +347,7 @@ router.post('/',
         legal_representative_id_type,
         legal_representative_id_number,
         licensee_name,
+        full_name,
         email,
         phone,
         address,
@@ -233,12 +374,13 @@ router.post('/',
         identification_type,
         identification_number,
         id_issue_city,
-        legal_name,
+        legal_name: isCompany ? legal_name : full_name,
         legal_name_short,
         legal_representative_name,
         legal_representative_id_type,
         legal_representative_id_number,
         licensee_name,
+        full_name,
         email,
         phone,
         address,
@@ -251,12 +393,13 @@ router.post('/',
       });
 
       // Log de actividad
+      const displayName = isCompany ? legal_name : full_name;
       await ActivityLog.create({
         user: req.user.id,
         action: 'CREATE',
         entity_type: 'supplier',
         entity_id: supplier._id,
-        description: `Creó el proveedor: ${legal_name}`,
+        description: `Creó el tercero: ${displayName}`,
         company: req.companyId
       });
 

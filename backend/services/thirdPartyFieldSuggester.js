@@ -192,7 +192,7 @@ function suggestFieldConfig(variableName, marker) {
   if (fieldMappings[normalized]) {
     return {
       name: normalized,
-      label: fieldMappings[normalized].label,
+      label: normalized, // Usar el field_name como label
       field_type: fieldMappings[normalized].field_type,
       category: fieldMappings[normalized].category,
       required: false, // Por defecto no obligatorio, admin decide
@@ -207,7 +207,7 @@ function suggestFieldConfig(variableName, marker) {
     if (normalized.includes(key) || key.includes(normalized)) {
       return {
         name: normalized,
-        label: config.label + ' (' + variableName + ')',
+        label: normalized, // Usar el field_name como label
         field_type: config.field_type,
         category: config.category,
         required: false,
@@ -221,7 +221,7 @@ function suggestFieldConfig(variableName, marker) {
   // Si no hay coincidencia, usar configuración genérica
   return {
     name: normalized,
-    label: variableName.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()),
+    label: normalized, // Usar el field_name como label
     field_type: 'text',
     category: 'other',
     required: false,

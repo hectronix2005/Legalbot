@@ -7,7 +7,7 @@ const fs = require('fs');
  * Normaliza el nombre de un campo para evitar duplicados
  * Elimina acentos, convierte a minúsculas y remueve separadores
  * @param {string} fieldName - Nombre del campo a normalizar
- * @returns {string} - Nombre normalizado
+ * @returns {string} - Nombre normalizado (sin separadores, para comparación)
  */
 function normalizeFieldName(fieldName) {
   return fieldName
@@ -19,6 +19,23 @@ function normalizeFieldName(fieldName) {
     .replace(/del/g, '') // Remover "del"
     .replace(/la/g, '') // Remover "la"
     .replace(/el/g, ''); // Remover "el"
+}
+
+/**
+ * Convierte el nombre de un campo al formato snake_case para usar como field_name
+ * Mantiene la estructura legible con guiones bajos entre palabras
+ * @param {string} fieldName - Nombre del campo original
+ * @returns {string} - Nombre en formato snake_case
+ */
+function toSnakeCase(fieldName) {
+  return fieldName
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '') // Remover acentos
+    .toLowerCase()
+    .replace(/[\/\-]+/g, '_') // Convertir barras y guiones a underscores
+    .replace(/\s+/g, '_') // Convertir espacios a underscores
+    .replace(/_+/g, '_') // Reemplazar múltiples underscores por uno solo
+    .replace(/^_|_$/g, ''); // Remover underscores al inicio y final
 }
 
 /**
@@ -48,68 +65,61 @@ async function extractYellowHighlightedFields(fileBuffer) {
 
     let match;
     while ((match = templateVarRegex.exec(html)) !== null) {
-      const fieldName = match[1].trim();
-      const normalized = normalizeFieldName(fieldName);
+      const marker = match[1].trim(); // Texto original del marcador
+      const normalized = normalizeFieldName(marker);
 
       // Solo agregar si no existe un campo con el mismo nombre normalizado
       if (!normalizedFieldNames.has(normalized)) {
-        normalizedFieldNames.set(normalized, fieldName);
+        normalizedFieldNames.set(normalized, marker);
 
-        // Generar etiqueta legible desde el nombre del campo
-        const fieldLabel = fieldName
-          .replace(/_/g, ' ')
-          .replace(/\//g, ' ')
-          .replace(/-/g, ' ')
-          .replace(/([A-Z])/g, ' $1')
-          .trim()
-          .split(' ')
-          .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
-          .join(' ');
+        // Generar field_name en formato snake_case
+        const fieldName = toSnakeCase(marker);
+
+        // Usar el marker original como field_label sin transformaciones
+        const fieldLabel = marker;
 
         fields.push({
+          marker: marker,
           field_name: fieldName,
           field_label: fieldLabel,
-          field_type: detectFieldType(fieldName),
+          field_type: detectFieldType(marker),
           required: true,
           display_order: fields.length
         });
 
-        console.log(`✅ Campo agregado: "${fieldName}" (normalizado: "${normalized}")`);
+        console.log(`✅ Campo agregado: marker="${marker}", field_name="${fieldName}", field_label="${fieldLabel}"`);
       } else {
-        console.log(`⚠️  Campo duplicado omitido: "${fieldName}" (ya existe como "${normalizedFieldNames.get(normalized)}")`);
+        console.log(`⚠️  Campo duplicado omitido: "${marker}" (ya existe como "${normalizedFieldNames.get(normalized)}")`);
       }
     }
 
     // Buscar también campos en formato Word (MERGEFIELD)
     const mergeFieldRegex = /MERGEFIELD\s+([^\s\\]+)/gi;
     while ((match = mergeFieldRegex.exec(html)) !== null) {
-      const fieldName = match[1].trim();
-      const normalized = normalizeFieldName(fieldName);
+      const marker = match[1].trim(); // Texto original del MERGEFIELD
+      const normalized = normalizeFieldName(marker);
 
       if (!normalizedFieldNames.has(normalized)) {
-        normalizedFieldNames.set(normalized, fieldName);
+        normalizedFieldNames.set(normalized, marker);
 
-        const fieldLabel = fieldName
-          .replace(/_/g, ' ')
-          .replace(/\//g, ' ')
-          .replace(/-/g, ' ')
-          .replace(/([A-Z])/g, ' $1')
-          .trim()
-          .split(' ')
-          .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
-          .join(' ');
+        // Generar field_name en formato snake_case
+        const fieldName = toSnakeCase(marker);
+
+        // Usar el marker original como field_label sin transformaciones
+        const fieldLabel = marker;
 
         fields.push({
+          marker: marker,
           field_name: fieldName,
           field_label: fieldLabel,
-          field_type: detectFieldType(fieldName),
+          field_type: detectFieldType(marker),
           required: true,
           display_order: fields.length
         });
 
-        console.log(`✅ MERGEFIELD agregado: "${fieldName}" (normalizado: "${normalized}")`);
+        console.log(`✅ MERGEFIELD agregado: marker="${marker}", field_name="${fieldName}", field_label="${fieldLabel}"`);
       } else {
-        console.log(`⚠️  MERGEFIELD duplicado omitido: "${fieldName}" (ya existe como "${normalizedFieldNames.get(normalized)}")`);
+        console.log(`⚠️  MERGEFIELD duplicado omitido: "${marker}" (ya existe como "${normalizedFieldNames.get(normalized)}")`);
       }
     }
 

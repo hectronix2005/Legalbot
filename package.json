@@ -7,9 +7,13 @@
     "dev": "concurrently \"npm run dev:backend\" \"npm run dev:frontend\"",
     "dev:backend": "cd backend && npm run dev",
     "dev:frontend": "cd frontend && npm run dev",
-    "build": "echo 'Frontend already built'",
+    "build": "cd frontend && npm run build && cd .. && npm run copy-build",
+    "copy-build": "node scripts/copy-build.js",
+    "build:frontend": "cd frontend && npm run build",
     "start": "cd backend && npm start",
-    "heroku-postbuild": "cd backend && npm install --omit=dev && echo 'Backend dependencies installed'"
+    "heroku-postbuild": "npm run build:frontend && npm run copy-build && cd backend && npm install --omit=dev",
+    "deploy:prepare": "npm run build && echo '✅ Build preparado para deploy'",
+    "deploy:heroku": "git push heroku main"
   },
   "keywords": [
     "legal",

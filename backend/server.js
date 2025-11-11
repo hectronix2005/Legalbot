@@ -99,6 +99,9 @@ const diagnosticsRoutes = require('./routes/diagnostics');
 const contractCategoriesRoutes = require('./routes/contract-categories');
 const supplierApprovalsRoutes = require('./routes/supplier-approvals');
 const contractRequestsImprovedRoutes = require('./routes/contract-requests-improved');
+const dataMigrationRoutes = require('./routes/data-migration');
+const supplierFieldSuggestionsRoutes = require('./routes/supplier-field-suggestions');
+const fieldManagementRoutes = require('./routes/field-management');
 
 // Usar rutas
 app.use('/api/auth', authRoutes);
@@ -122,6 +125,9 @@ app.use('/api/diagnostics', diagnosticsRoutes);
 app.use('/api/contract-categories', contractCategoriesRoutes);
 app.use('/api/supplier-approvals', supplierApprovalsRoutes);
 app.use('/api/contract-requests-v2', contractRequestsImprovedRoutes);
+app.use('/api/data-migration', dataMigrationRoutes);
+app.use('/api/supplier-field-suggestions', supplierFieldSuggestionsRoutes);
+app.use('/api/field-management', fieldManagementRoutes);
 
 // Ruta raíz - Comentada para permitir que el frontend se sirva en /
 // La información de la API está disponible en /api/health

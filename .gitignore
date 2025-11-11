@@ -65,9 +65,14 @@ backend/create-*.js
 backend/debug-*.js
 backend/validate-*.js
 
-# Frontend build
+# Frontend build (se copia a backend/public durante deploy)
 frontend/build/
 frontend/dist/
+
+# Backend public (build del frontend copiado aquí)
+# Nota: Este directorio se genera durante el build y se incluye en el deploy
+backend/public/*
+!backend/public/.gitkeep
 
 # OS generated files
 .DS_Store
