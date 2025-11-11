@@ -9,7 +9,7 @@
     "dev:frontend": "cd frontend && npm run dev",
     "copy-build": "node scripts/copy-build.js",
     "start": "cd backend && npm start",
-    "heroku-postbuild": "npm --prefix frontend run build && npm run copy-build && cd backend && npm install --omit=dev",
+    "heroku-postbuild": "cd frontend && npm install && npm run build && cd .. && npm run copy-build && cd backend && npm install --omit=dev",
     "deploy:prepare": "npm --prefix frontend run build && npm run copy-build && echo '✅ Build preparado para deploy'",
     "deploy:heroku": "git push heroku main"
   },
