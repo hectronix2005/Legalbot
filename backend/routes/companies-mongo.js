@@ -3,6 +3,7 @@ const router = express.Router();
 const { authenticate, authorize } = require('../middleware/auth');
 const { body, validationResult } = require('express-validator');
 const Company = require('../models/Company');
+const UserCompany = require('../models/UserCompany');
 
 // Obtener empresas del usuario actual (para company switcher)
 router.get('/my-companies', authenticate, async (req, res) => {
@@ -18,13 +19,20 @@ router.get('/my-companies', authenticate, async (req, res) => {
         roles: ['super_admin']
       }));
     } else {
-      // Para otros usuarios, usar companyRoles del token
-      const companyRoles = req.user.companyRoles || {};
-      companies = Object.entries(companyRoles).map(([companyId, data]) => ({
-        companyId,
-        companyName: data.name || companyId,
-        roles: data.roles || []
-      }));
+      // Para otros usuarios, consultar UserCompany
+      const userCompanies = await UserCompany.find({
+        user: req.user.id,
+        isActive: true
+      }).populate('company', 'name active');
+
+      // Filtrar solo empresas activas y mapear
+      companies = userCompanies
+        .filter(uc => uc.company && uc.company.active)
+        .map(uc => ({
+          companyId: uc.company._id.toString(),
+          companyName: uc.company.name,
+          roles: [uc.role]
+        }));
     }
 
     res.json(companies);

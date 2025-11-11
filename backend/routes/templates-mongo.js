@@ -667,10 +667,12 @@ router.post('/',
       if (is_shared) {
         // Plantilla compartida con todas las empresas (solo super_admin)
         console.log('🌐 Creando plantilla compartida con todas las empresas');
-      } else if (shared_with_companies && shared_with_companies.length > 0) {
+      } else if (shared_with_companies && Array.isArray(shared_with_companies) && shared_with_companies.length > 0) {
         // Plantilla compartida con empresas específicas
         templateData.shared_with_companies = shared_with_companies;
         templateData.is_shared = false;
+        // Asignar la primera empresa como company principal (requerido por el modelo)
+        templateData.company = shared_with_companies[0];
         console.log('🏢 Compartiendo plantilla con empresas:', shared_with_companies.length);
       } else {
         // Plantilla solo para una empresa específica
@@ -683,8 +685,8 @@ router.post('/',
           console.warn('⚠️  CompanyId:', req.companyId, 'Role:', req.user.role);
 
           // Si es super_admin sin company específica, convertir a plantilla compartida
-          if (req.user.role === 'super_admin' && req.companyId === 'ALL') {
-            console.log('🔄 Convirtiendo plantilla a compartida (super_admin con ALL)');
+          if (req.user.role === 'super_admin') {
+            console.log('🔄 Convirtiendo plantilla a compartida (super_admin)');
             templateData.is_shared = true;
           } else {
             return res.status(400).json({

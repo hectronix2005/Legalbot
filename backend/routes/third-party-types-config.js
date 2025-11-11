@@ -9,20 +9,23 @@ const { analyzeTemplateVariables, applyRecommendations } = require('../services/
 // Obtener todos los tipos de terceros configurados
 router.get('/', authenticate, async (req, res) => {
   try {
+    // Obtener companyId del header manualmente (ya que no usamos verifyTenant aquí)
+    const companyId = req.headers['x-company-id'];
+
     const filter = { active: true };
 
     // Super admin ve todos, otros usuarios ven solo los de su empresa o genéricos
-    if (req.user.role !== 'super_admin' && req.companyId) {
+    if (req.user.role !== 'super_admin' && companyId) {
       filter.$or = [
         { isGeneric: true }, // Tipos genéricos (aplican a todas las empresas)
-        { companies: req.companyId }, // Tipos específicos de su empresa
-        { company: req.companyId }, // DEPRECATED: Compatibilidad con versión anterior
+        { companies: companyId }, // Tipos específicos de su empresa
+        { company: companyId }, // DEPRECATED: Compatibilidad con versión anterior
         { company: null } // DEPRECATED: Compatibilidad con versión anterior
       ];
     }
 
     console.log('🔍 [DEBUG /third-party-types] Fetching types with filter:', JSON.stringify(filter));
-    console.log('🔍 [DEBUG /third-party-types] User role:', req.user.role, 'CompanyId:', req.companyId);
+    console.log('🔍 [DEBUG /third-party-types] User role:', req.user.role, 'CompanyId:', companyId);
 
     const types = await ThirdPartyTypeConfig.find(filter)
       .populate('created_by', 'name email')
@@ -35,8 +38,8 @@ router.get('/', authenticate, async (req, res) => {
 
     res.json(types);
   } catch (error) {
-    console.error('Error al obtener tipos de terceros:', error);
-    res.status(500).json({ error: 'Error al obtener tipos de terceros' });
+    console.error('❌ Error al obtener tipos de terceros:', error);
+    res.status(500).json({ error: 'Error al obtener tipos de terceros', details: error.message });
   }
 });
 
