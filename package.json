@@ -7,10 +7,12 @@
     "dev": "concurrently \"npm run dev:backend\" \"npm run dev:frontend\"",
     "dev:backend": "cd backend && npm run dev",
     "dev:frontend": "cd frontend && npm run dev",
+    "build": "cd frontend && npm run build && cd .. && npm run copy-build",
+    "build:frontend": "cd frontend && npm run build",
     "copy-build": "node scripts/copy-build.js",
     "start": "cd backend && npm start",
     "heroku-postbuild": "cd frontend && npm install && npm run build && cd .. && npm run copy-build && cd backend && npm install --omit=dev",
-    "deploy:prepare": "npm --prefix frontend run build && npm run copy-build && echo '✅ Build preparado para deploy'",
+    "deploy:prepare": "npm run build && echo '✅ Build preparado para deploy'",
     "deploy:heroku": "git push heroku main"
   },
   "keywords": [
