@@ -205,6 +205,64 @@
   font-size: 1.1rem;
 }
 
+/* Supplier Selector Styles */
+.supplier-selector-section {
+  background-color: #f8f9fa;
+  border: 2px dashed #007bff;
+  border-radius: 8px;
+  padding: 1.5rem;
+  margin-bottom: 2rem;
+}
+
+.supplier-select {
+  width: 100%;
+  font-size: 1rem;
+  padding: 0.75rem;
+  border: 2px solid #007bff;
+  background-color: white;
+}
+
+.supplier-select:disabled {
+  background-color: #e9ecef;
+  cursor: not-allowed;
+}
+
+.field-hint {
+  color: #6c757d;
+  font-weight: normal;
+  font-size: 0.85rem;
+  font-style: italic;
+}
+
+.loading-text {
+  color: #6c757d;
+  font-size: 0.85rem;
+  margin-top: 0.5rem;
+  margin-bottom: 0;
+  font-style: italic;
+}
+
+.selected-supplier-info {
+  margin-top: 1rem;
+  padding: 1rem;
+  background-color: #d4edda;
+  border: 1px solid #c3e6cb;
+  border-radius: 4px;
+}
+
+.info-text {
+  margin: 0 0 0.5rem 0;
+  color: #155724;
+  font-size: 0.95rem;
+}
+
+.info-subtext {
+  margin: 0;
+  color: #155724;
+  font-size: 0.85rem;
+  font-style: italic;
+}
+
 /* Responsive design */
 @media (max-width: 768px) {
   .generator-content {

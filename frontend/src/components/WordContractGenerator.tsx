@@ -16,6 +16,30 @@ interface WordTemplate {
   word_file_original_name: string;
 }
 
+interface Supplier {
+  _id: string;
+  identification_type: string;
+  identification_number: string;
+  id_issue_city?: string;
+  legal_name?: string;
+  legal_name_short?: string;
+  legal_representative_name?: string;
+  legal_representative_id_type?: string;
+  legal_representative_id_number?: string;
+  full_name?: string;
+  licensee_name?: string;
+  email?: string;
+  phone?: string;
+  address?: string;
+  city?: string;
+  country?: string;
+  company: string;
+  third_party_type?: string;
+  custom_fields?: Record<string, any>;
+  active: boolean;
+  approval_status: string;
+}
+
 interface WordContractGeneratorProps {
   onContractGenerated?: (contractId: string) => void;
 }
@@ -26,9 +50,13 @@ const WordContractGenerator: React.FC<WordContractGeneratorProps> = ({ onContrac
   const [formData, setFormData] = useState<Record<string, any>>({});
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
+  const [suppliers, setSuppliers] = useState<Supplier[]>([]);
+  const [selectedSupplier, setSelectedSupplier] = useState<Supplier | null>(null);
+  const [loadingSuppliers, setLoadingSuppliers] = useState(false);
 
   useEffect(() => {
     fetchTemplates();
+    fetchSuppliers();
   }, []);
 
   const fetchTemplates = async () => {
@@ -42,9 +70,145 @@ const WordContractGenerator: React.FC<WordContractGeneratorProps> = ({ onContrac
     }
   };
 
+  const fetchSuppliers = async () => {
+    setLoadingSuppliers(true);
+    try {
+      const response = await api.get('/suppliers');
+      setSuppliers(response.data);
+    } catch (error) {
+      console.error('Error fetching suppliers:', error);
+    } finally {
+      setLoadingSuppliers(false);
+    }
+  };
+
   const handleTemplateSelect = (template: WordTemplate) => {
     setSelectedTemplate(template);
     setFormData({});
+    setSelectedSupplier(null); // Reset supplier selection when changing template
+  };
+
+  const normalizeFieldName = (fieldName: string): string => {
+    return fieldName
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '') // Remove accents
+      .replace(/[^a-z0-9]/g, ''); // Remove special characters
+  };
+
+  const findMatchingSupplierField = (templateFieldName: string, supplier: Supplier): any => {
+    const normalizedTemplateField = normalizeFieldName(templateFieldName);
+
+    // Direct mapping dictionary with common variations
+    const fieldMappings: Record<string, string[]> = {
+      // Email
+      'email': ['email', 'correo', 'correelectronico', 'mail'],
+      // Phone
+      'telefono': ['phone', 'telefono', 'celular', 'movil', 'tel'],
+      'phone': ['phone', 'telefono', 'celular', 'movil', 'tel'],
+      // Address
+      'direccion': ['address', 'direccion', 'domicilio'],
+      'address': ['address', 'direccion', 'domicilio'],
+      // City
+      'ciudad': ['city', 'ciudad', 'municipio'],
+      'city': ['city', 'ciudad', 'municipio'],
+      // Country
+      'pais': ['country', 'pais', 'nacion'],
+      'country': ['country', 'pais', 'nacion'],
+      // Identification
+      'identificacion': ['identification_number', 'identificacion', 'nit', 'cedula', 'documento', 'nrodocumento'],
+      'nit': ['identification_number', 'identificacion', 'nit'],
+      'cedula': ['identification_number', 'identificacion', 'cedula'],
+      'documento': ['identification_number', 'identificacion', 'documento'],
+      // Identification type
+      'tipodocumento': ['identification_type', 'tipodocumento', 'tipoidentificacion'],
+      'tipoidentificacion': ['identification_type', 'tipodocumento', 'tipoidentificacion'],
+      // Names
+      'nombre': ['full_name', 'legal_name', 'nombre', 'nombreCompleto', 'razonsocial'],
+      'razonsocial': ['legal_name', 'razonsocial', 'nombre', 'nombreCompleto'],
+      'nombreempresa': ['legal_name', 'legal_name_short', 'nombreempresa', 'empresa'],
+      'empresa': ['legal_name', 'legal_name_short', 'nombreempresa', 'empresa'],
+      // Legal representative
+      'representantelegal': ['legal_representative_name', 'representantelegal', 'representante'],
+      'representante': ['legal_representative_name', 'representantelegal', 'representante'],
+      'cedularepresentante': ['legal_representative_id_number', 'cedularepresentante', 'documentorepresentante'],
+      'documentorepresentante': ['legal_representative_id_number', 'cedularepresentante', 'documentorepresentante'],
+      'tipoiddrepresentante': ['legal_representative_id_type', 'tipoiddrepresentante'],
+      // City of issue
+      'ciudadexpedicion': ['id_issue_city', 'ciudadexpedicion', 'lugarexpedicion'],
+      'lugarexpedicion': ['id_issue_city', 'ciudadexpedicion', 'lugarexpedicion'],
+    };
+
+    // First check direct field mappings
+    for (const [key, variations] of Object.entries(fieldMappings)) {
+      const normalizedKey = normalizeFieldName(key);
+      if (normalizedTemplateField.includes(normalizedKey) || normalizedKey.includes(normalizedTemplateField)) {
+        for (const variation of variations) {
+          const supplierValue = (supplier as any)[variation];
+          if (supplierValue !== undefined && supplierValue !== null && supplierValue !== '') {
+            return supplierValue;
+          }
+        }
+      }
+    }
+
+    // Then try direct field name match in supplier
+    const supplierFields = Object.keys(supplier);
+    for (const supplierField of supplierFields) {
+      const normalizedSupplierField = normalizeFieldName(supplierField);
+
+      // Check if fields match or contain each other
+      if (normalizedTemplateField === normalizedSupplierField ||
+          normalizedTemplateField.includes(normalizedSupplierField) ||
+          normalizedSupplierField.includes(normalizedTemplateField)) {
+        const value = (supplier as any)[supplierField];
+        if (value !== undefined && value !== null && value !== '') {
+          return value;
+        }
+      }
+    }
+
+    // Check custom fields if they exist
+    if (supplier.custom_fields) {
+      for (const [customFieldKey, customFieldValue] of Object.entries(supplier.custom_fields)) {
+        const normalizedCustomField = normalizeFieldName(customFieldKey);
+        if (normalizedTemplateField === normalizedCustomField ||
+            normalizedTemplateField.includes(normalizedCustomField) ||
+            normalizedCustomField.includes(normalizedTemplateField)) {
+          if (customFieldValue !== undefined && customFieldValue !== null && customFieldValue !== '') {
+            return customFieldValue;
+          }
+        }
+      }
+    }
+
+    return null;
+  };
+
+  const handleSupplierSelect = (supplierId: string) => {
+    if (!supplierId) {
+      setSelectedSupplier(null);
+      return;
+    }
+
+    const supplier = suppliers.find(s => s._id === supplierId);
+    if (!supplier || !selectedTemplate) {
+      return;
+    }
+
+    setSelectedSupplier(supplier);
+
+    // Auto-fill form data with supplier information
+    const newFormData: Record<string, any> = { ...formData };
+
+    selectedTemplate.fields.forEach(field => {
+      const matchedValue = findMatchingSupplierField(field.name, supplier);
+      if (matchedValue !== null) {
+        newFormData[field.name] = matchedValue;
+      }
+    });
+
+    setFormData(newFormData);
   };
 
   const handleInputChange = (fieldName: string, value: any) => {
@@ -217,6 +381,42 @@ const WordContractGenerator: React.FC<WordContractGeneratorProps> = ({ onContrac
               <p>Plantilla: {selectedTemplate.name}</p>
             </div>
 
+            {/* Selector de Terceros */}
+            <div className="supplier-selector-section">
+              <div className="field-group">
+                <label className="field-label">
+                  Seleccionar Tercero (Opcional)
+                  <span className="field-hint"> - Prellena automáticamente los campos del formulario</span>
+                </label>
+                <select
+                  value={selectedSupplier?._id || ''}
+                  onChange={(e) => handleSupplierSelect(e.target.value)}
+                  className="form-input supplier-select"
+                  disabled={loadingSuppliers}
+                >
+                  <option value="">-- Seleccionar tercero existente --</option>
+                  {suppliers.map(supplier => {
+                    const displayName = supplier.legal_name || supplier.full_name || supplier.identification_number;
+                    const displayId = supplier.identification_number;
+                    return (
+                      <option key={supplier._id} value={supplier._id}>
+                        {displayName} ({displayId})
+                      </option>
+                    );
+                  })}
+                </select>
+                {loadingSuppliers && <p className="loading-text">Cargando terceros...</p>}
+                {selectedSupplier && (
+                  <div className="selected-supplier-info">
+                    <p className="info-text">
+                      Tercero seleccionado: <strong>{selectedSupplier.legal_name || selectedSupplier.full_name}</strong>
+                    </p>
+                    <p className="info-subtext">Los campos se han prellenado automáticamente. Puedes modificarlos si es necesario.</p>
+                  </div>
+                )}
+              </div>
+            </div>
+
             <div className="form-fields">
               {selectedTemplate.fields?.map((field, index) => (
                 <div key={index} className="field-group">
@@ -233,7 +433,7 @@ const WordContractGenerator: React.FC<WordContractGeneratorProps> = ({ onContrac
             </div>
 
             <div className="form-actions">
-              <button 
+              <button
                 onClick={generateContract}
                 disabled={generating}
                 className="btn-generate"
