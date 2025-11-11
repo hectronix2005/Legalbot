@@ -1,0 +1,829 @@
+/* ============================================
+   SUPPLIERS - Modern Compact Layout
+   ============================================ */
+.suppliers {
+  max-width: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+/* ============================================
+   GRADIENT HEADER
+   ============================================ */
+.gradient-header {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  padding: 2rem 1.5rem;
+  margin-bottom: 1.5rem;
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.2);
+}
+
+.header-content {
+  max-width: 1400px;
+  margin: 0 auto;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 2rem;
+}
+
+.header-text h1 {
+  color: white;
+  font-size: 2rem;
+  font-weight: 800;
+  margin: 0 0 0.5rem 0;
+  letter-spacing: -0.5px;
+}
+
+.header-text p {
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 1rem;
+  margin: 0;
+  font-weight: 400;
+}
+
+.btn-create-supplier {
+  background: white;
+  color: #667eea;
+  border: none;
+  padding: 0.875rem 1.75rem;
+  border-radius: 8px;
+  font-size: 1rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  white-space: nowrap;
+}
+
+.btn-create-supplier:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.25);
+  background: #f8f9fa;
+}
+
+/* ============================================
+   FILTERS CONTAINER
+   ============================================ */
+.filters-container {
+  max-width: 1400px;
+  margin: 0 auto 1.5rem;
+  padding: 0 1.5rem;
+}
+
+.filters-row {
+  display: flex;
+  gap: 1rem;
+  align-items: center;
+  background: white;
+  padding: 1rem;
+  border-radius: 10px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+.filter-select {
+  padding: 0.75rem 1rem;
+  border: 2px solid #e1e8ed;
+  border-radius: 8px;
+  font-size: 0.95rem;
+  background: white;
+  cursor: pointer;
+  transition: all 0.2s;
+  min-width: 200px;
+  font-weight: 500;
+  color: #333;
+}
+
+.filter-select:focus {
+  outline: none;
+  border-color: #667eea;
+  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+}
+
+.search-input {
+  flex: 1;
+  padding: 0.75rem 1rem;
+  border: 2px solid #e1e8ed;
+  border-radius: 8px;
+  font-size: 0.95rem;
+  transition: all 0.2s;
+  font-weight: 400;
+}
+
+.search-input:focus {
+  outline: none;
+  border-color: #667eea;
+  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+}
+
+.search-input::placeholder {
+  color: #adb5bd;
+}
+
+.results-badge {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  padding: 0.75rem 1.25rem;
+  border-radius: 20px;
+  font-size: 0.9rem;
+  font-weight: 700;
+  white-space: nowrap;
+  box-shadow: 0 2px 8px rgba(102, 126, 234, 0.3);
+}
+
+/* ============================================
+   TABLE WRAPPER & COMPACT TABLE
+   ============================================ */
+.suppliers-list {
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 0 1.5rem;
+}
+
+.table-wrapper {
+  background: white;
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
+}
+
+.suppliers-table-compact {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+}
+
+.suppliers-table-compact thead {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+}
+
+.suppliers-table-compact thead th {
+  padding: 1rem 0.75rem;
+  text-align: left;
+  font-weight: 700;
+  font-size: 0.85rem;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: white;
+}
+
+.suppliers-table-compact tbody tr {
+  border-bottom: 1px solid #e5e7eb;
+  transition: background-color 0.2s;
+}
+
+.suppliers-table-compact tbody tr:hover {
+  background-color: #f9fafb;
+}
+
+.suppliers-table-compact tbody tr.inactive-row {
+  opacity: 0.5;
+}
+
+.suppliers-table-compact tbody td {
+  padding: 0.875rem 0.75rem;
+  vertical-align: middle;
+}
+
+/* ============================================
+   SPECIALIZED COLUMNS
+   ============================================ */
+
+/* Status Badge Column */
+.status-badge {
+  display: inline-block;
+  padding: 0.375rem 0.875rem;
+  border-radius: 16px;
+  font-size: 0.8rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.status-badge.approved {
+  background: #d1fae5;
+  color: #065f46;
+  border: 1px solid #6ee7b7;
+}
+
+.status-badge.pending {
+  background: #fef3c7;
+  color: #92400e;
+  border: 1px solid #fcd34d;
+}
+
+.status-badge.rejected {
+  background: #fee2e2;
+  color: #991b1b;
+  border: 1px solid #fca5a5;
+}
+
+/* Type Column */
+.type-col {
+  font-size: 0.9rem;
+}
+
+.type-badge {
+  display: inline-block;
+  padding: 0.3rem 0.75rem;
+  background: #eff6ff;
+  border: 1px solid #93c5fd;
+  border-radius: 12px;
+  font-size: 0.85rem;
+  color: #1e40af;
+  font-weight: 600;
+}
+
+.no-type {
+  color: #9ca3af;
+  font-style: italic;
+}
+
+/* Supplier Info Column */
+.supplier-info-col {
+  min-width: 220px;
+}
+
+.supplier-name {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.supplier-name strong {
+  color: #1f2937;
+  font-size: 0.95rem;
+  font-weight: 700;
+}
+
+.supplier-name small {
+  color: #6b7280;
+  font-size: 0.8rem;
+}
+
+.representative-compact {
+  margin-top: 0.35rem;
+  font-size: 0.8rem;
+  color: #6b7280;
+}
+
+.rep-label {
+  font-weight: 600;
+  color: #4b5563;
+}
+
+/* ID Column */
+.id-col {
+  min-width: 140px;
+}
+
+.id-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.id-type {
+  display: inline-block;
+  padding: 0.2rem 0.6rem;
+  background: #f3f4f6;
+  border-radius: 6px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: #374151;
+  text-transform: uppercase;
+}
+
+.id-number {
+  font-size: 0.9rem;
+  color: #1f2937;
+  font-weight: 600;
+  font-family: 'Courier New', monospace;
+}
+
+/* Contact Column */
+.contact-col {
+  min-width: 180px;
+}
+
+.contact-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.contact-email {
+  color: #1f2937;
+  font-size: 0.85rem;
+}
+
+.contact-phone {
+  color: #6b7280;
+  font-size: 0.8rem;
+}
+
+.no-contact {
+  color: #9ca3af;
+  font-size: 0.85rem;
+  font-style: italic;
+}
+
+/* ============================================
+   ACTIONS COLUMN
+   ============================================ */
+.actions-col {
+  width: 110px;
+}
+
+.supplier-actions {
+  display: flex;
+  gap: 0.25rem;
+  align-items: center;
+  justify-content: flex-start;
+  flex-wrap: nowrap;
+}
+
+.btn-action {
+  padding: 0.4rem;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  background: #f8f9fa;
+  border: 1px solid #dee2e6;
+  min-width: 28px;
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.btn-action svg {
+  flex-shrink: 0;
+}
+
+.btn-action:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+}
+
+.btn-action:active {
+  transform: translateY(0);
+}
+
+.btn-edit {
+  color: #3b82f6;
+  background: #eff6ff;
+  border-color: #bfdbfe;
+}
+
+.btn-edit:hover {
+  background: #dbeafe;
+  border-color: #3b82f6;
+  color: #1e40af;
+}
+
+.btn-toggle-on {
+  color: #10b981;
+  background: #d1fae5;
+  border-color: #a7f3d0;
+}
+
+.btn-toggle-on:hover {
+  background: #a7f3d0;
+  border-color: #10b981;
+  color: #047857;
+}
+
+.btn-toggle-off {
+  color: #f59e0b;
+  background: #fef3c7;
+  border-color: #fde68a;
+}
+
+.btn-toggle-off:hover {
+  background: #fde68a;
+  border-color: #f59e0b;
+  color: #d97706;
+}
+
+.btn-delete {
+  color: #ef4444;
+  background: #fee2e2;
+  border-color: #fecaca;
+}
+
+.btn-delete:hover {
+  background: #fecaca;
+  border-color: #ef4444;
+  color: #dc2626;
+}
+
+/* ============================================
+   MODAL STYLES
+   ============================================ */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.6);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 2000;
+  backdrop-filter: blur(4px);
+}
+
+.modal {
+  background: white;
+  padding: 2rem;
+  border-radius: 16px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+  max-width: 600px;
+  width: 90%;
+  max-height: 90vh;
+  overflow-y: auto;
+  animation: modalSlideIn 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.modal-large {
+  max-width: 900px;
+}
+
+@keyframes modalSlideIn {
+  from {
+    opacity: 0;
+    transform: translateY(-50px) scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.modal h3 {
+  margin-top: 0;
+  margin-bottom: 1.5rem;
+  color: #667eea;
+  font-size: 1.5rem;
+  font-weight: 800;
+  border-bottom: 3px solid #e0e7ff;
+  padding-bottom: 0.75rem;
+}
+
+.modal-content {
+  max-height: calc(90vh - 200px);
+  overflow-y: auto;
+  padding-right: 0.5rem;
+}
+
+.form-section {
+  margin-bottom: 2rem;
+  padding: 1.5rem;
+  background: #f9fafb;
+  border-radius: 12px;
+  border: 1px solid #e5e7eb;
+}
+
+.form-section h4 {
+  margin-top: 0;
+  margin-bottom: 1rem;
+  color: #4b5563;
+  font-size: 1.125rem;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.form-section h4::before {
+  content: '';
+  width: 4px;
+  height: 1.5rem;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border-radius: 2px;
+}
+
+.form-group {
+  margin-bottom: 1rem;
+}
+
+.form-group label {
+  display: block;
+  margin-bottom: 0.5rem;
+  font-weight: 600;
+  color: #374151;
+  font-size: 0.9375rem;
+}
+
+.form-group input,
+.form-group select,
+.form-group textarea {
+  width: 100%;
+  padding: 0.75rem;
+  border: 2px solid #d1d5db;
+  border-radius: 8px;
+  font-size: 1rem;
+  box-sizing: border-box;
+  transition: all 0.2s;
+  background-color: white;
+}
+
+.form-group input:focus,
+.form-group select:focus,
+.form-group textarea:focus {
+  outline: none;
+  border-color: #667eea;
+  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+}
+
+.form-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+}
+
+.modal-actions {
+  display: flex;
+  gap: 1rem;
+  justify-content: flex-end;
+  margin-top: 2rem;
+  padding-top: 1.5rem;
+  border-top: 2px solid #e5e7eb;
+}
+
+.modal-actions button {
+  padding: 0.875rem 2rem;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 1rem;
+  font-weight: 700;
+  transition: all 0.2s;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.btn-secondary {
+  background: linear-gradient(135deg, #6c757d 0%, #5a6268 100%);
+  color: white;
+  box-shadow: 0 4px 12px rgba(108, 117, 125, 0.3);
+}
+
+.btn-secondary:hover {
+  background: linear-gradient(135deg, #5a6268 0%, #495057 100%);
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(108, 117, 125, 0.4);
+}
+
+.btn-primary {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+}
+
+.btn-primary:hover {
+  background: linear-gradient(135deg, #764ba2 0%, #667eea 100%);
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(102, 126, 234, 0.4);
+}
+
+.btn-primary:disabled {
+  background: #9ca3af;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+  opacity: 0.6;
+}
+
+/* ============================================
+   EMPTY STATE
+   ============================================ */
+.empty-state {
+  text-align: center;
+  padding: 4rem 2rem;
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+.empty-state h3 {
+  color: #4b5563;
+  margin-bottom: 0.5rem;
+  font-size: 1.5rem;
+}
+
+.empty-state p {
+  color: #6b7280;
+  font-size: 1rem;
+}
+
+.loading {
+  text-align: center;
+  padding: 4rem 2rem;
+  font-size: 1.25rem;
+  color: #667eea;
+  font-weight: 600;
+}
+
+/* ============================================
+   RESPONSIVE DESIGN
+   ============================================ */
+
+@media (max-width: 1200px) {
+  .suppliers-table-compact {
+    font-size: 0.85rem;
+  }
+
+  .suppliers-table-compact thead th,
+  .suppliers-table-compact tbody td {
+    padding: 0.75rem 0.5rem;
+  }
+
+  .supplier-info-col {
+    min-width: 180px;
+  }
+}
+
+@media (max-width: 1024px) {
+  .header-content {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .btn-create-supplier {
+    width: 100%;
+  }
+
+  .filters-row {
+    flex-wrap: wrap;
+    gap: 0.75rem;
+  }
+
+  .filter-select {
+    min-width: 150px;
+    flex: 1;
+  }
+
+  .search-input {
+    min-width: 200px;
+  }
+
+  .modal-large {
+    max-width: 90%;
+  }
+}
+
+@media (max-width: 768px) {
+  .gradient-header {
+    padding: 1.5rem 1rem;
+  }
+
+  .header-text h1 {
+    font-size: 1.5rem;
+  }
+
+  .header-text p {
+    font-size: 0.9rem;
+  }
+
+  .filters-container {
+    padding: 0 1rem;
+  }
+
+  .filters-row {
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+
+  .filter-select,
+  .search-input,
+  .results-badge {
+    width: 100%;
+  }
+
+  .suppliers-list {
+    padding: 0 1rem;
+  }
+
+  .table-wrapper {
+    overflow-x: auto;
+  }
+
+  .suppliers-table-compact {
+    min-width: 800px;
+  }
+
+  .form-row {
+    grid-template-columns: 1fr;
+    gap: 0.75rem;
+  }
+
+  .modal {
+    width: 95%;
+    padding: 1.5rem;
+    max-height: 95vh;
+  }
+
+  .modal h3 {
+    font-size: 1.25rem;
+  }
+
+  .modal-content {
+    max-height: calc(95vh - 180px);
+  }
+
+  .form-section {
+    padding: 1.25rem;
+    margin-bottom: 1.5rem;
+  }
+
+  .modal-actions {
+    flex-direction: column;
+  }
+
+  .modal-actions button {
+    width: 100%;
+  }
+}
+
+@media (max-width: 480px) {
+  .gradient-header {
+    padding: 1.25rem 0.75rem;
+  }
+
+  .header-text h1 {
+    font-size: 1.25rem;
+  }
+
+  .header-text p {
+    font-size: 0.85rem;
+  }
+
+  .filters-container,
+  .suppliers-list {
+    padding: 0 0.75rem;
+  }
+
+  .filters-row {
+    padding: 0.75rem;
+  }
+
+  .suppliers-table-compact thead th {
+    font-size: 0.75rem;
+    padding: 0.625rem 0.4rem;
+  }
+
+  .suppliers-table-compact tbody td {
+    padding: 0.625rem 0.4rem;
+    font-size: 0.8rem;
+  }
+
+  .status-badge {
+    padding: 0.3rem 0.6rem;
+    font-size: 0.7rem;
+  }
+
+  .modal {
+    width: 100%;
+    height: 100%;
+    max-height: 100vh;
+    border-radius: 0;
+    padding: 1.25rem;
+  }
+
+  .modal h3 {
+    font-size: 1.125rem;
+  }
+
+  .form-section {
+    padding: 1rem;
+  }
+
+  .form-section h4 {
+    font-size: 1rem;
+  }
+
+  .form-group label {
+    font-size: 0.875rem;
+  }
+
+  .form-group input,
+  .form-group select,
+  .form-group textarea {
+    padding: 0.625rem;
+    font-size: 0.9375rem;
+  }
+
+  .empty-state {
+    padding: 3rem 1.5rem;
+  }
+
+  .empty-state h3 {
+    font-size: 1.25rem;
+  }
+
+  .empty-state p {
+    font-size: 0.9375rem;
+  }
+}

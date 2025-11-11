@@ -1,0 +1,133 @@
+.contract-request-form {
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 2rem;
+}
+
+.subtitle {
+  color: #64748b;
+  margin-top: 0.5rem;
+}
+
+.categories-selection h2 {
+  margin-bottom: 2rem;
+  color: #1e293b;
+}
+
+.categories-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 1.5rem;
+}
+
+.category-option {
+  background: white;
+  border: 2px solid transparent;
+  border-radius: 16px;
+  padding: 2rem;
+  cursor: pointer;
+  transition: all 0.3s;
+  text-align: center;
+}
+
+.category-option:hover {
+  border-color: currentColor;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+  transform: translateY(-4px);
+}
+
+.category-option .category-icon {
+  width: 64px;
+  height: 64px;
+  border-radius: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 2rem;
+  margin: 0 auto 1rem;
+}
+
+.category-option h3 {
+  margin-bottom: 0.75rem;
+  color: #1e293b;
+}
+
+.category-option p {
+  color: #64748b;
+  font-size: 0.9375rem;
+  margin-bottom: 1rem;
+  line-height: 1.6;
+}
+
+.category-info {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  justify-content: center;
+}
+
+.request-form-container {
+  background: white;
+  border-radius: 16px;
+  padding: 2rem;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.form-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 2rem;
+  padding-bottom: 1rem;
+  border-bottom: 2px solid #e2e8f0;
+}
+
+.btn-back {
+  background: transparent;
+  border: none;
+  color: #3b82f6;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 0.5rem 1rem;
+  border-radius: 8px;
+  transition: background-color 0.2s;
+}
+
+.btn-back:hover {
+  background-color: #eff6ff;
+}
+
+.category-badge {
+  padding: 0.5rem 1.5rem;
+  border-radius: 20px;
+  color: white;
+  font-weight: 600;
+  font-size: 0.9375rem;
+}
+
+.form-section {
+  margin-bottom: 2rem;
+  padding: 1.5rem;
+  background: #f8fafc;
+  border-radius: 12px;
+}
+
+.form-section h3 {
+  margin-top: 0;
+  margin-bottom: 1rem;
+  color: #1e293b;
+}
+
+.section-description {
+  color: #64748b;
+  margin-bottom: 1.5rem;
+}
+
+.form-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 1rem;
+  margin-top: 2rem;
+  padding-top: 2rem;
+  border-top: 2px solid #e2e8f0;
+}

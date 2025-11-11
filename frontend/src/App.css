@@ -1,0 +1,412 @@
+/* ============================================
+   VARIABLES CSS - Paleta Corporativa Moderna
+   ============================================ */
+:root {
+  /* Colores Principales */
+  --primary-900: #0f172a;
+  --primary-800: #1e293b;
+  --primary-700: #334155;
+  --primary-600: #475569;
+  --primary-500: #64748b;
+
+  /* Azul Corporativo */
+  --corporate-blue-900: #1e3a8a;
+  --corporate-blue-800: #1e40af;
+  --corporate-blue-700: #1d4ed8;
+  --corporate-blue-600: #2563eb;
+  --corporate-blue-500: #3b82f6;
+  --corporate-blue-400: #60a5fa;
+  --corporate-blue-300: #93c5fd;
+
+  /* Acentos */
+  --accent-teal: #14b8a6;
+  --accent-purple: #8b5cf6;
+  --accent-orange: #f97316;
+
+  /* Grises */
+  --gray-50: #f8fafc;
+  --gray-100: #f1f5f9;
+  --gray-200: #e2e8f0;
+  --gray-300: #cbd5e1;
+  --gray-400: #94a3b8;
+  --gray-500: #64748b;
+  --gray-600: #475569;
+  --gray-700: #334155;
+  --gray-800: #1e293b;
+  --gray-900: #0f172a;
+
+  /* Estados */
+  --success-bg: #d1fae5;
+  --success-text: #065f46;
+  --success-border: #6ee7b7;
+
+  --warning-bg: #fef3c7;
+  --warning-text: #92400e;
+  --warning-border: #fcd34d;
+
+  --error-bg: #fee2e2;
+  --error-text: #991b1b;
+  --error-border: #fca5a5;
+
+  --info-bg: #dbeafe;
+  --info-text: #1e40af;
+  --info-border: #93c5fd;
+
+  /* Sombras */
+  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+  --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+
+  /* Transiciones */
+  --transition-fast: 150ms cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-base: 200ms cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-slow: 300ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* ============================================
+   ESTILOS GLOBALES
+   ============================================ */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  background: linear-gradient(135deg, var(--gray-50) 0%, var(--gray-100) 100%);
+  color: var(--gray-900);
+  line-height: 1.6;
+}
+
+.App {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  max-width: 100%;
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+.main-content {
+  flex: 1;
+  padding: 0;
+  margin-top: 80px;
+  max-width: 100%;
+  margin-left: 0;
+  margin-right: 0;
+  width: 100%;
+  box-sizing: border-box;
+  overflow-x: hidden;
+}
+
+/* ============================================
+   LOADING & ESTADOS
+   ============================================ */
+.loading {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 200px;
+  font-size: 1.125rem;
+  color: var(--gray-600);
+  font-weight: 500;
+}
+
+.empty-state {
+  text-align: center;
+  padding: 4rem 2rem;
+  background: white;
+  border-radius: 16px;
+  box-shadow: var(--shadow-md);
+  margin: 2rem 0;
+}
+
+.empty-state h3 {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--gray-900);
+  margin-bottom: 0.75rem;
+}
+
+.empty-state p {
+  color: var(--gray-700);
+  font-size: 1rem;
+}
+
+/* ============================================
+   BOTONES MODERNOS
+   ============================================ */
+.btn-primary {
+  background: linear-gradient(135deg, var(--corporate-blue-600) 0%, var(--corporate-blue-700) 100%);
+  color: white;
+  border: none;
+  padding: 0.75rem 1.5rem;
+  border-radius: 10px;
+  cursor: pointer;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  transition: all var(--transition-base);
+  box-shadow: var(--shadow-md);
+  letter-spacing: 0.3px;
+}
+
+.btn-primary:hover {
+  background: linear-gradient(135deg, var(--corporate-blue-700) 0%, var(--corporate-blue-800) 100%);
+  box-shadow: var(--shadow-lg);
+  transform: translateY(-1px);
+}
+
+.btn-primary:active {
+  transform: translateY(0);
+  box-shadow: var(--shadow-md);
+}
+
+.btn-secondary {
+  background: white;
+  color: var(--gray-700);
+  border: 2px solid var(--gray-200);
+  padding: 0.625rem 1.25rem;
+  border-radius: 10px;
+  cursor: pointer;
+  font-size: 0.875rem;
+  font-weight: 600;
+  margin-right: 0.5rem;
+  transition: all var(--transition-base);
+}
+
+.btn-secondary:hover {
+  background: var(--gray-50);
+  border-color: var(--corporate-blue-400);
+  color: var(--corporate-blue-700);
+  box-shadow: var(--shadow-sm);
+}
+
+.btn-danger {
+  background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%);
+  color: white;
+  border: none;
+  padding: 0.625rem 1.25rem;
+  border-radius: 10px;
+  cursor: pointer;
+  font-size: 0.875rem;
+  font-weight: 600;
+  transition: all var(--transition-base);
+  box-shadow: var(--shadow-md);
+}
+
+.btn-danger:hover {
+  background: linear-gradient(135deg, #b91c1c 0%, #991b1b 100%);
+  box-shadow: var(--shadow-lg);
+  transform: translateY(-1px);
+}
+
+.btn-download-word {
+  background: linear-gradient(135deg, var(--accent-teal) 0%, #0d9488 100%);
+  color: white;
+  border: none;
+  padding: 0.625rem 1.25rem;
+  border-radius: 10px;
+  cursor: pointer;
+  font-size: 0.875rem;
+  font-weight: 600;
+  margin-right: 0.5rem;
+  transition: all var(--transition-base);
+  box-shadow: var(--shadow-md);
+}
+
+.btn-download-word:hover {
+  background: linear-gradient(135deg, #0d9488 0%, #0f766e 100%);
+  box-shadow: var(--shadow-lg);
+  transform: translateY(-1px);
+}
+
+/* ============================================
+   HEADERS DE PÁGINA
+   ============================================ */
+.page-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.75rem;
+  padding: 0.75rem;
+  background: white;
+  border-radius: 16px;
+  box-shadow: var(--shadow-md);
+  border-left: 5px solid var(--corporate-blue-600);
+}
+
+.page-header h1 {
+  color: var(--corporate-blue-800);
+  font-size: 2rem;
+  font-weight: 800;
+  letter-spacing: -0.5px;
+  /* Eliminado gradiente transparente que causaba problemas de legibilidad */
+}
+
+/* ============================================
+   CARDS MODERNOS
+   ============================================ */
+.contract-card,
+.template-card,
+.company-card {
+  background: white;
+  border-radius: 16px;
+  padding: 1rem;
+  margin-bottom: 1rem;
+  box-shadow: var(--shadow-md);
+  border: 1px solid var(--gray-200);
+  transition: all var(--transition-base);
+  position: relative;
+  overflow: hidden;
+}
+
+.contract-card::before,
+.template-card::before,
+.company-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 5px;
+  height: 100%;
+  background: linear-gradient(180deg, var(--corporate-blue-500) 0%, var(--corporate-blue-700) 100%);
+}
+
+.contract-card:hover,
+.template-card:hover,
+.company-card:hover {
+  box-shadow: var(--shadow-lg);
+  transform: translateY(-2px);
+  border-color: var(--corporate-blue-300);
+}
+
+.contract-card h3,
+.template-card h3,
+.company-card h3 {
+  color: var(--gray-900);
+  margin-bottom: 1rem;
+  font-size: 1.25rem;
+  font-weight: 700;
+  letter-spacing: -0.3px;
+}
+
+.contract-card p,
+.template-card p,
+.company-card p {
+  margin-bottom: 0.75rem;
+  color: var(--gray-600);
+  font-size: 0.9375rem;
+  line-height: 1.6;
+}
+
+.contract-actions,
+.template-actions,
+.company-actions {
+  margin-top: 0.75rem;
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+/* ============================================
+   STATUS BADGES MODERNOS
+   ============================================ */
+.status {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.375rem 0.875rem;
+  border-radius: 20px;
+  font-size: 0.8125rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  box-shadow: var(--shadow-sm);
+}
+
+.status.pending,
+.status.borrador {
+  background: var(--warning-bg);
+  color: var(--warning-text);
+  border: 1px solid var(--warning-border);
+}
+
+.status.approved,
+.status.aprobado,
+.status.firmado {
+  background: var(--success-bg);
+  color: var(--success-text);
+  border: 1px solid var(--success-border);
+}
+
+.status.rejected,
+.status.cancelado {
+  background: var(--error-bg);
+  color: var(--error-text);
+  border: 1px solid var(--error-border);
+}
+
+.status.revision {
+  background: var(--info-bg);
+  color: var(--info-text);
+  border: 1px solid var(--info-border);
+}
+
+/* ============================================
+   LISTAS Y GRIDS
+   ============================================ */
+.contracts-list,
+.templates-list,
+.companies-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+  gap: 1.5rem;
+}
+
+@media (max-width: 768px) {
+  .contracts-list,
+  .templates-list,
+  .companies-list {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ============================================
+   RESPONSIVE
+   ============================================ */
+@media (max-width: 1024px) {
+  .main-content {
+    padding: 0.5rem;
+  }
+
+  .page-header {
+    flex-direction: column;
+    gap: 1rem;
+    align-items: flex-start;
+  }
+
+  .page-header h1 {
+    font-size: 1.75rem;
+  }
+}
+
+@media (max-width: 640px) {
+  .main-content {
+    padding: 0.25rem;
+    margin-top: 70px;
+  }
+
+  .page-header {
+    padding: 1rem 0.5rem;
+  }
+
+  .page-header h1 {
+    font-size: 1.5rem;
+  }
+}

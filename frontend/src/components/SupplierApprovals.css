@@ -1,0 +1,526 @@
+.supplier-approvals {
+  max-width: 100%;
+  width: 100%;
+  margin: 0;
+  padding: 0.5rem;
+  box-sizing: border-box;
+}
+
+.page-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1.5rem;
+  padding: 1.5rem;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border-radius: 10px;
+  color: white;
+}
+
+.page-header h1 {
+  margin: 0 0 0.5rem 0;
+  font-size: 1.8rem;
+}
+
+.page-header .subtitle {
+  margin: 0;
+  opacity: 0.9;
+  font-size: 0.95rem;
+}
+
+.filter-buttons {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.btn-primary,
+.btn-secondary {
+  padding: 0.6rem 1.2rem;
+  border: none;
+  border-radius: 6px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  font-size: 0.9rem;
+}
+
+.btn-primary {
+  background: white;
+  color: #667eea;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.btn-primary:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+}
+
+.btn-secondary {
+  background: rgba(255, 255, 255, 0.2);
+  color: white;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+}
+
+.btn-secondary:hover {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+.btn-danger {
+  background: #ef4444;
+  color: white;
+  border: none;
+  padding: 0.6rem 1.2rem;
+  border-radius: 6px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-danger:hover {
+  background: #dc2626;
+}
+
+/* ============================================
+   TABLA DE APROBACIONES - COMPACTA
+   ============================================ */
+.approvals-table-wrapper {
+  width: 100%;
+  overflow-x: auto;
+  background: white;
+  border-radius: 10px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.08);
+  margin-top: 1rem;
+}
+
+.approvals-table {
+  width: 100%;
+  min-width: 1200px;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+}
+
+.approvals-table thead {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+}
+
+.approvals-table thead th {
+  padding: 0.7rem 0.6rem;
+  text-align: left;
+  font-weight: 700;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  white-space: nowrap;
+}
+
+/* Anchos específicos de columnas */
+.th-supplier-name {
+  width: 20%;
+}
+
+.th-identification {
+  width: 14%;
+}
+
+.th-representative {
+  width: 16%;
+}
+
+.th-contact {
+  width: 18%;
+}
+
+.th-creator {
+  width: 14%;
+}
+
+.th-status {
+  width: 10%;
+}
+
+.th-actions {
+  width: 8%;
+  text-align: center;
+}
+
+.approvals-table tbody tr.approval-row {
+  border-bottom: 1px solid #e5e7eb;
+  transition: background-color 0.2s;
+}
+
+.approvals-table tbody tr.approval-row:hover {
+  background-color: #f9fafb;
+}
+
+.approvals-table tbody tr.approval-row.status-pending {
+  border-left: 4px solid #f59e0b;
+}
+
+.approvals-table tbody tr.approval-row.status-approved {
+  border-left: 4px solid #10b981;
+}
+
+.approvals-table tbody tr.approval-row.status-rejected {
+  border-left: 4px solid #ef4444;
+}
+
+.approvals-table tbody td {
+  padding: 0.7rem 0.6rem;
+  vertical-align: middle;
+}
+
+/* ============================================
+   COLUMNA: TERCERO
+   ============================================ */
+.supplier-name-col {
+  width: 20%;
+}
+
+.supplier-name-info strong {
+  color: #1f2937;
+  font-size: 0.85rem;
+  font-weight: 700;
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ============================================
+   COLUMNA: IDENTIFICACIÓN
+   ============================================ */
+.identification-col {
+  width: 14%;
+}
+
+.id-badge {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.id-type {
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: #6b7280;
+  text-transform: uppercase;
+}
+
+.id-number {
+  font-size: 0.8rem;
+  color: #1f2937;
+  font-weight: 500;
+}
+
+/* ============================================
+   COLUMNA: REPRESENTANTE LEGAL
+   ============================================ */
+.representative-col {
+  width: 16%;
+}
+
+.representative-name {
+  display: block;
+  color: #4b5563;
+  font-weight: 500;
+  font-size: 0.8rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ============================================
+   COLUMNA: CONTACTO
+   ============================================ */
+.contact-col {
+  width: 18%;
+}
+
+.contact-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.contact-item {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.75rem;
+  color: #4b5563;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.contact-item svg {
+  flex-shrink: 0;
+  color: #667eea;
+}
+
+.no-contact {
+  font-size: 0.75rem;
+  color: #9ca3af;
+  font-style: italic;
+}
+
+/* ============================================
+   COLUMNA: CREADO POR
+   ============================================ */
+.creator-col {
+  width: 14%;
+}
+
+.creator-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+}
+
+.creator-name {
+  color: #1f2937;
+  font-size: 0.8rem;
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.created-date {
+  color: #6b7280;
+  font-size: 0.7rem;
+}
+
+/* ============================================
+   COLUMNA: ESTADO
+   ============================================ */
+.status-col {
+  width: 10%;
+}
+
+.status-badge {
+  display: inline-block;
+  padding: 0.3rem 0.7rem;
+  border-radius: 12px;
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: capitalize;
+  white-space: nowrap;
+}
+
+/* ============================================
+   COLUMNA: ACCIONES
+   ============================================ */
+.actions-col {
+  width: 8%;
+  text-align: center;
+}
+
+.action-buttons {
+  display: flex;
+  gap: 0.25rem;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: nowrap;
+}
+
+.btn-action {
+  padding: 0.35rem;
+  border: none;
+  border-radius: 5px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  min-width: 28px;
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.btn-action svg {
+  flex-shrink: 0;
+}
+
+.btn-action:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+}
+
+.btn-action.btn-approve-action {
+  background: #d1fae5;
+  color: #10b981;
+  border: 1px solid #a7f3d0;
+}
+
+.btn-action.btn-approve-action:hover {
+  background: #a7f3d0;
+  color: #047857;
+  border-color: #10b981;
+}
+
+.btn-action.btn-reject-action {
+  background: #fee2e2;
+  color: #ef4444;
+  border: 1px solid #fecaca;
+}
+
+.btn-action.btn-reject-action:hover {
+  background: #fecaca;
+  color: #dc2626;
+  border-color: #ef4444;
+}
+
+/* ============================================
+   INLINE REJECTION REASON
+   ============================================ */
+.inline-rejection {
+  display: block;
+  color: #991b1b;
+  font-size: 0.7rem;
+  margin-top: 0.2rem;
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ============================================
+   INLINE REJECTION FORM
+   ============================================ */
+.inline-rejection-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  width: 100%;
+  max-width: 300px;
+}
+
+.inline-textarea {
+  width: 100%;
+  padding: 0.5rem;
+  border: 2px solid #e5e7eb;
+  border-radius: 6px;
+  font-size: 0.75rem;
+  font-family: inherit;
+  resize: vertical;
+  box-sizing: border-box;
+}
+
+.inline-textarea:focus {
+  outline: none;
+  border-color: #ef4444;
+  box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.1);
+}
+
+.inline-buttons {
+  display: flex;
+  gap: 0.25rem;
+  justify-content: flex-end;
+}
+
+.btn-danger-sm,
+.btn-cancel-sm {
+  padding: 0.3rem;
+  border: none;
+  border-radius: 5px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  min-width: 26px;
+  height: 26px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.btn-danger-sm {
+  background: #fee2e2;
+  color: #ef4444;
+  border: 1px solid #fecaca;
+}
+
+.btn-danger-sm:hover {
+  background: #fecaca;
+  color: #dc2626;
+  border-color: #ef4444;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+}
+
+.btn-cancel-sm {
+  background: #f3f4f6;
+  color: #6b7280;
+  border: 1px solid #d1d5db;
+}
+
+.btn-cancel-sm:hover {
+  background: #e5e7eb;
+  color: #4b5563;
+  border-color: #9ca3af;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+}
+
+/* ============================================
+   EMPTY STATE
+   ============================================ */
+.empty-state {
+  text-align: center;
+  padding: 4rem 2rem;
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+.empty-state h3 {
+  color: #4b5563;
+  margin-bottom: 0.5rem;
+  font-size: 1.5rem;
+}
+
+.empty-state p {
+  color: #6b7280;
+  font-size: 1rem;
+}
+
+.loading {
+  text-align: center;
+  padding: 3rem;
+  font-size: 1.2rem;
+  color: #667eea;
+}
+
+/* ============================================
+   RESPONSIVE
+   ============================================ */
+@media (max-width: 1400px) {
+  .approvals-table {
+    min-width: 1100px;
+    font-size: 0.8rem;
+  }
+
+  .approvals-table thead th {
+    padding: 0.6rem 0.5rem;
+    font-size: 0.7rem;
+  }
+
+  .approvals-table tbody td {
+    padding: 0.6rem 0.5rem;
+  }
+}
+
+@media (max-width: 768px) {
+  .supplier-approvals {
+    padding: 0.25rem;
+  }
+
+  .page-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 1rem;
+  }
+
+  .approvals-table {
+    min-width: 1000px;
+  }
+}

@@ -1,0 +1,434 @@
+/* Estilos para el generador de contratos */
+.contract-generator {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 20px;
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+}
+
+.generator-header {
+  text-align: center;
+  margin-bottom: 30px;
+}
+
+.generator-header h2 {
+  color: #2c3e50;
+  margin-bottom: 10px;
+  font-size: 2rem;
+}
+
+.generator-header p {
+  color: #5a6c7d;
+  font-size: 1.1rem;
+}
+
+.error-message {
+  background-color: #e74c3c;
+  color: white;
+  padding: 15px;
+  border-radius: 8px;
+  margin-bottom: 20px;
+  text-align: center;
+}
+
+/* Selección de plantillas */
+.template-selection {
+  margin-bottom: 40px;
+}
+
+.template-selection h3 {
+  color: #2c3e50;
+  margin-bottom: 20px;
+  font-size: 1.5rem;
+}
+
+.templates-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 20px;
+}
+
+.template-card {
+  border: 2px solid #ecf0f1;
+  border-radius: 12px;
+  padding: 20px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  background: white;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.template-card:hover {
+  border-color: #3498db;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+}
+
+.template-card.selected {
+  border-color: #27ae60;
+  background-color: #f8fff8;
+}
+
+.template-card h4 {
+  color: #2c3e50;
+  margin-bottom: 10px;
+  font-size: 1.2rem;
+}
+
+.template-category {
+  color: #3498db;
+  font-weight: 600;
+  margin-bottom: 8px;
+  font-size: 0.9rem;
+}
+
+.template-description {
+  color: #5a6c7d;
+  margin-bottom: 15px;
+  line-height: 1.4;
+}
+
+.template-stats {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.85rem;
+  color: #5a6c7d;
+}
+
+.repeat-info {
+  background-color: #e8f5e8;
+  color: #27ae60;
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-weight: 500;
+}
+
+/* Formulario de contrato */
+.contract-form {
+  background: white;
+  border-radius: 12px;
+  padding: 30px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+  margin-bottom: 30px;
+}
+
+.contract-form h3 {
+  color: #2c3e50;
+  margin-bottom: 25px;
+  font-size: 1.5rem;
+}
+
+.form-section {
+  margin-bottom: 30px;
+}
+
+.form-section h4 {
+  color: #34495e;
+  margin-bottom: 15px;
+  font-size: 1.2rem;
+  border-bottom: 2px solid #ecf0f1;
+  padding-bottom: 8px;
+}
+
+.section-description {
+  color: #5a6c7d;
+  margin-bottom: 20px;
+  font-style: italic;
+}
+
+.form-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 20px;
+}
+
+.form-field {
+  display: flex;
+  flex-direction: column;
+}
+
+.form-field label {
+  color: #2c3e50;
+  margin-bottom: 8px;
+  font-weight: 600;
+  font-size: 0.95rem;
+}
+
+.required {
+  color: #e74c3c;
+  margin-left: 4px;
+}
+
+.form-input {
+  padding: 12px;
+  border: 2px solid #ecf0f1;
+  border-radius: 8px;
+  font-size: 1rem;
+  transition: border-color 0.3s ease;
+  font-family: inherit;
+}
+
+.form-input:focus {
+  outline: none;
+  border-color: #3498db;
+  box-shadow: 0 0 0 3px rgba(52, 152, 219, 0.1);
+}
+
+.form-input:required:invalid {
+  border-color: #e74c3c;
+}
+
+.repeat-indicator {
+  background-color: #e8f5e8;
+  color: #27ae60;
+  padding: 6px 10px;
+  border-radius: 6px;
+  font-size: 0.85rem;
+  margin-top: 5px;
+  font-weight: 500;
+}
+
+/* Variables reutilizadas */
+.repeated-variables {
+  background-color: #f8f9fa;
+  border-radius: 8px;
+  padding: 20px;
+  border: 1px solid #e9ecef;
+}
+
+.repeated-variable {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px;
+  background: white;
+  border-radius: 6px;
+  margin-bottom: 10px;
+  border: 1px solid #dee2e6;
+}
+
+.variable-info {
+  display: flex;
+  flex-direction: column;
+}
+
+.variable-info strong {
+  color: #2c3e50;
+  font-size: 0.95rem;
+}
+
+.source-info {
+  color: #5a6c7d;
+  font-size: 0.8rem;
+  font-style: italic;
+}
+
+.variable-value {
+  color: #27ae60;
+  font-weight: 500;
+  background-color: #e8f5e8;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 0.9rem;
+}
+
+/* Acciones del formulario */
+.form-actions {
+  text-align: center;
+  margin-top: 30px;
+  padding-top: 20px;
+  border-top: 2px solid #ecf0f1;
+}
+
+.generate-button {
+  background: linear-gradient(135deg, #27ae60, #2ecc71);
+  color: white;
+  border: none;
+  padding: 15px 30px;
+  border-radius: 8px;
+  font-size: 1.1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  box-shadow: 0 4px 8px rgba(39, 174, 96, 0.3);
+}
+
+.generate-button:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 12px rgba(39, 174, 96, 0.4);
+}
+
+.generate-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
+}
+
+/* Contrato generado */
+.generated-contract {
+  background: white;
+  border-radius: 12px;
+  padding: 30px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+
+.generated-contract h3 {
+  color: #2c3e50;
+  margin-bottom: 20px;
+  font-size: 1.5rem;
+}
+
+.contract-content {
+  background-color: #f8f9fa;
+  border: 1px solid #e9ecef;
+  border-radius: 8px;
+  padding: 20px;
+  margin-bottom: 20px;
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+.contract-content pre {
+  margin: 0;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  font-family: 'Courier New', monospace;
+  font-size: 0.9rem;
+  line-height: 1.5;
+  color: #2c3e50;
+}
+
+.contract-actions {
+  display: flex;
+  gap: 15px;
+  justify-content: center;
+}
+
+.copy-button, .download-button {
+  padding: 10px 20px;
+  border: none;
+  border-radius: 6px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.copy-button {
+  background-color: #3498db;
+  color: white;
+}
+
+.copy-button:hover {
+  background-color: #2980b9;
+  transform: translateY(-1px);
+}
+
+.download-button {
+  background-color: #e74c3c;
+  color: white;
+}
+
+.download-button:hover {
+  background-color: #c0392b;
+  transform: translateY(-1px);
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .contract-generator {
+    padding: 15px;
+  }
+  
+  .templates-grid {
+    grid-template-columns: 1fr;
+  }
+  
+  .form-grid {
+    grid-template-columns: 1fr;
+  }
+  
+  .contract-actions {
+    flex-direction: column;
+  }
+  
+  .repeated-variable {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+}
+
+/* Mensaje de validación */
+.validation-message {
+  color: #e74c3c;
+  font-size: 0.9rem;
+  margin-top: 10px;
+  padding: 10px;
+  background-color: #fdf2f2;
+  border: 1px solid #f5c6cb;
+  border-radius: 4px;
+  text-align: center;
+}
+
+/* Botón deshabilitado */
+.generate-button:disabled {
+  background-color: #bdc3c7;
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.generate-button:disabled:hover {
+  background-color: #bdc3c7;
+  transform: none;
+}
+
+/* Estilos para información del contrato */
+.contract-info {
+  background-color: #f8f9fa;
+  border: 1px solid #dee2e6;
+  border-radius: 8px;
+  padding: 15px;
+  margin-bottom: 20px;
+}
+
+.contract-info p {
+  margin: 5px 0;
+  color: #3a4047;
+}
+
+.contract-info strong {
+  color: #212529;
+}
+
+/* Estilos para botones de descarga */
+.word-button {
+  background-color: #2b579a !important;
+  color: white !important;
+}
+
+.word-button:hover {
+  background-color: #1e3f73 !important;
+}
+
+.pdf-button {
+  background-color: #dc3545 !important;
+  color: white !important;
+}
+
+.pdf-button:hover {
+  background-color: #c82333 !important;
+}
+
+/* Mejorar layout de botones de acción */
+.contract-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 15px;
+}
+
+.contract-actions button {
+  flex: 1;
+  min-width: 150px;
+}

@@ -1,0 +1,113 @@
+.dynamic-questionnaire {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.question-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.question-label {
+  font-weight: 600;
+  color: #1e293b;
+  font-size: 0.9375rem;
+}
+
+.question-label .required {
+  color: #dc2626;
+  margin-left: 0.25rem;
+}
+
+.help-text {
+  font-size: 0.875rem;
+  color: #64748b;
+  margin: 0;
+  line-height: 1.5;
+}
+
+.question-group input[type="text"],
+.question-group input[type="email"],
+.question-group input[type="number"],
+.question-group input[type="date"],
+.question-group input[type="phone"],
+.question-group select,
+.question-group textarea {
+  padding: 0.75rem;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  font-size: 1rem;
+  transition: all 0.2s;
+}
+
+.question-group input:focus,
+.question-group select:focus,
+.question-group textarea:focus {
+  outline: none;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.input-error {
+  border-color: #dc2626 !important;
+}
+
+.input-error:focus {
+  box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.1) !important;
+}
+
+.error-message {
+  color: #dc2626;
+  font-size: 0.875rem;
+  font-weight: 500;
+}
+
+/* Radio y Checkbox */
+.radio-group,
+.multiselect {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  padding: 0.5rem 0;
+}
+
+.radio-label,
+.checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  cursor: pointer;
+  padding: 0.75rem;
+  border-radius: 8px;
+  transition: background-color 0.2s;
+}
+
+.radio-label:hover,
+.checkbox-label:hover {
+  background-color: #f8fafc;
+}
+
+.radio-label input[type="radio"],
+.checkbox-label input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  cursor: pointer;
+  margin: 0;
+}
+
+.radio-label span,
+.checkbox-label span {
+  font-size: 0.9375rem;
+  color: #334155;
+  user-select: none;
+}
+
+.checkbox-label.single {
+  padding: 0;
+}
+
+.checkbox-label.single:hover {
+  background-color: transparent;
+}

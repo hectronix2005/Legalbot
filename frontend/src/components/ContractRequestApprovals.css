@@ -1,0 +1,669 @@
+.contract-request-approvals {
+  max-width: 100%;
+  width: 100%;
+  margin: 0;
+  padding: 0.5rem;
+  box-sizing: border-box;
+}
+
+.page-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1.5rem;
+  padding: 1.5rem;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border-radius: 10px;
+  color: white;
+}
+
+.page-header h1 {
+  margin: 0 0 0.5rem 0;
+  font-size: 1.8rem;
+}
+
+.page-header .subtitle {
+  margin: 0;
+  opacity: 0.9;
+  font-size: 0.95rem;
+}
+
+.btn-primary,
+.btn-secondary {
+  padding: 0.6rem 1.2rem;
+  border: none;
+  border-radius: 6px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  font-size: 0.9rem;
+}
+
+.btn-primary {
+  background: white;
+  color: #667eea;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.btn-primary:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+}
+
+.btn-secondary {
+  background: rgba(255, 255, 255, 0.2);
+  color: white;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+}
+
+.btn-secondary:hover {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+.btn-danger {
+  background: #ef4444;
+  color: white;
+  border: none;
+  padding: 0.75rem 1.5rem;
+  border-radius: 8px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.btn-danger:hover {
+  background: #dc2626;
+}
+
+.btn-danger:disabled {
+  background: #9ca3af;
+  cursor: not-allowed;
+}
+
+/* ============================================
+   TABLA DE SOLICITUDES - COMPACTA
+   ============================================ */
+.requests-table-wrapper {
+  width: 100%;
+  overflow-x: auto;
+  background: white;
+  border-radius: 10px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.08);
+  margin-top: 1rem;
+}
+
+.requests-table {
+  width: 100%;
+  min-width: 1200px;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+}
+
+.requests-table thead {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+}
+
+.requests-table thead th {
+  padding: 0.7rem 0.6rem;
+  text-align: left;
+  font-weight: 700;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  white-space: nowrap;
+}
+
+/* Anchos específicos de columnas */
+.th-request-title {
+  width: 22%;
+}
+
+.th-category {
+  width: 14%;
+}
+
+.th-priority {
+  width: 10%;
+}
+
+.th-requester {
+  width: 15%;
+}
+
+.th-date {
+  width: 10%;
+}
+
+.th-assigned {
+  width: 14%;
+}
+
+.th-status {
+  width: 10%;
+}
+
+.th-actions {
+  width: 5%;
+  text-align: center;
+}
+
+.requests-table tbody tr.request-row {
+  border-bottom: 1px solid #e5e7eb;
+  transition: background-color 0.2s;
+}
+
+.requests-table tbody tr.request-row:hover {
+  background-color: #f9fafb;
+}
+
+.requests-table tbody tr.request-row.status-pending {
+  border-left: 4px solid #f59e0b;
+}
+
+.requests-table tbody tr.request-row.status-in_review {
+  border-left: 4px solid #3b82f6;
+}
+
+.requests-table tbody tr.request-row.status-approved,
+.requests-table tbody tr.request-row.status-completed {
+  border-left: 4px solid #10b981;
+}
+
+.requests-table tbody tr.request-row.status-rejected {
+  border-left: 4px solid #ef4444;
+}
+
+.requests-table tbody td {
+  padding: 0.7rem 0.6rem;
+  vertical-align: middle;
+}
+
+/* ============================================
+   COLUMNA: SOLICITUD
+   ============================================ */
+.title-col {
+  width: 22%;
+}
+
+.request-title-info strong {
+  color: #1f2937;
+  font-size: 0.85rem;
+  font-weight: 700;
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ============================================
+   COLUMNA: CATEGORÍA
+   ============================================ */
+.category-col {
+  width: 14%;
+}
+
+.category-badge-compact {
+  display: inline-block;
+  padding: 0.3rem 0.7rem;
+  border-radius: 10px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+
+/* ============================================
+   COLUMNA: PRIORIDAD
+   ============================================ */
+.priority-col {
+  width: 10%;
+}
+
+.priority-badge {
+  display: inline-block;
+  padding: 0.3rem 0.7rem;
+  border-radius: 12px;
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: capitalize;
+  white-space: nowrap;
+}
+
+/* ============================================
+   COLUMNA: SOLICITANTE
+   ============================================ */
+.requester-col {
+  width: 15%;
+}
+
+.requester-name {
+  display: block;
+  color: #4b5563;
+  font-weight: 500;
+  font-size: 0.8rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ============================================
+   COLUMNA: FECHA
+   ============================================ */
+.date-col {
+  width: 10%;
+}
+
+.date-value {
+  color: #4b5563;
+  font-size: 0.75rem;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+/* ============================================
+   COLUMNA: ASIGNADO
+   ============================================ */
+.assigned-col {
+  width: 14%;
+}
+
+.assigned-name {
+  display: block;
+  color: #3b82f6;
+  font-weight: 600;
+  font-size: 0.8rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.not-assigned {
+  color: #9ca3af;
+  font-size: 0.75rem;
+  font-style: italic;
+}
+
+/* ============================================
+   COLUMNA: ESTADO
+   ============================================ */
+.status-col {
+  width: 10%;
+}
+
+.status-badge {
+  display: inline-block;
+  padding: 0.3rem 0.7rem;
+  border-radius: 12px;
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: capitalize;
+  white-space: nowrap;
+}
+
+/* ============================================
+   COLUMNA: ACCIONES
+   ============================================ */
+.actions-col {
+  width: 5%;
+  text-align: center;
+}
+
+.action-buttons {
+  display: flex;
+  gap: 0.25rem;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: nowrap;
+}
+
+.btn-action {
+  padding: 0.35rem;
+  border: none;
+  border-radius: 5px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  min-width: 28px;
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.btn-action svg {
+  flex-shrink: 0;
+}
+
+.btn-action:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+}
+
+.btn-action.btn-assign {
+  background: #dbeafe;
+  color: #3b82f6;
+  border: 1px solid #93c5fd;
+}
+
+.btn-action.btn-assign:hover {
+  background: #93c5fd;
+  color: #1e40af;
+  border-color: #3b82f6;
+}
+
+.btn-action.btn-view {
+  background: #e0e7ff;
+  color: #6366f1;
+  border: 1px solid #c7d2fe;
+}
+
+.btn-action.btn-view:hover {
+  background: #c7d2fe;
+  color: #4338ca;
+  border-color: #6366f1;
+}
+
+/* ============================================
+   MODAL STYLES
+   ============================================ */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.5);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+  padding: 1rem;
+}
+
+.modal {
+  background: white;
+  padding: 0;
+  border-radius: 12px;
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+  max-width: 800px;
+  width: 90%;
+  max-height: 90vh;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.modal-large {
+  max-width: 900px;
+}
+
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: start;
+  padding: 1.5rem;
+  border-bottom: 2px solid #e2e8f0;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+}
+
+.modal-header h3 {
+  margin: 0;
+  font-size: 1.5rem;
+  flex: 1;
+}
+
+.modal-close {
+  background: rgba(255, 255, 255, 0.2);
+  border: none;
+  font-size: 2rem;
+  color: white;
+  cursor: pointer;
+  line-height: 1;
+  padding: 0;
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  transition: all 0.2s;
+}
+
+.modal-close:hover {
+  background: rgba(255, 255, 255, 0.3);
+  transform: rotate(90deg);
+}
+
+.modal-body {
+  padding: 1.5rem;
+  overflow-y: auto;
+  flex: 1;
+}
+
+.request-detail-section {
+  margin-bottom: 2rem;
+}
+
+.request-detail-section h4 {
+  margin: 0 0 1rem 0;
+  color: #1e293b;
+  font-size: 1.125rem;
+  border-bottom: 2px solid #e2e8f0;
+  padding-bottom: 0.5rem;
+}
+
+.detail-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 1rem;
+  padding: 1rem;
+  background: #f8fafc;
+  border-radius: 8px;
+}
+
+.detail-grid > div {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.detail-grid label {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #64748b;
+}
+
+.detail-grid span {
+  color: #1e293b;
+}
+
+.questionnaire-answers {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.answer-row {
+  padding: 0.75rem 1rem;
+  background: #f8fafc;
+  border-radius: 8px;
+  display: grid;
+  grid-template-columns: 1fr 2fr;
+  gap: 1rem;
+  align-items: start;
+}
+
+.answer-row label {
+  font-weight: 600;
+  color: #475569;
+  font-size: 0.9375rem;
+}
+
+.answer-row span {
+  color: #1e293b;
+}
+
+.approval-section {
+  margin-top: 2rem;
+  padding-top: 2rem;
+  border-top: 2px solid #e2e8f0;
+}
+
+.form-group {
+  margin-bottom: 1.5rem;
+}
+
+.form-group label {
+  display: block;
+  margin-bottom: 0.5rem;
+  font-weight: 600;
+  color: #1e293b;
+  font-size: 0.9rem;
+}
+
+.form-group textarea {
+  width: 100%;
+  padding: 0.75rem;
+  border: 2px solid #cbd5e1;
+  border-radius: 8px;
+  font-size: 0.9rem;
+  font-family: inherit;
+  resize: vertical;
+  box-sizing: border-box;
+}
+
+.form-group textarea:focus {
+  outline: none;
+  border-color: #667eea;
+  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+}
+
+.modal-actions {
+  display: flex;
+  gap: 1rem;
+  justify-content: flex-end;
+  margin-top: 1.5rem;
+}
+
+.btn-approve {
+  background: #10b981;
+  color: white;
+  border: none;
+  padding: 0.75rem 1.5rem;
+  border-radius: 8px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.btn-approve:hover {
+  background: #059669;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+}
+
+.success-notice {
+  padding: 1rem;
+  background: #d1fae5;
+  border-left: 4px solid #10b981;
+  border-radius: 8px;
+  color: #065f46;
+  font-weight: 600;
+  margin-top: 1rem;
+}
+
+.rejection-notice {
+  padding: 1rem;
+  background: #fee2e2;
+  border-left: 4px solid #ef4444;
+  border-radius: 8px;
+  color: #991b1b;
+  font-weight: 600;
+  margin-top: 1rem;
+}
+
+.modal-footer {
+  padding: 1rem 1.5rem;
+  border-top: 2px solid #e2e8f0;
+  display: flex;
+  justify-content: flex-end;
+  background: #f8fafc;
+}
+
+/* ============================================
+   EMPTY STATE
+   ============================================ */
+.empty-state {
+  text-align: center;
+  padding: 4rem 2rem;
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+.empty-state h3 {
+  color: #4b5563;
+  margin-bottom: 0.5rem;
+  font-size: 1.5rem;
+}
+
+.empty-state p {
+  color: #6b7280;
+  font-size: 1rem;
+}
+
+.loading {
+  text-align: center;
+  padding: 3rem;
+  font-size: 1.2rem;
+  color: #667eea;
+}
+
+/* ============================================
+   RESPONSIVE
+   ============================================ */
+@media (max-width: 1400px) {
+  .requests-table {
+    min-width: 1100px;
+    font-size: 0.8rem;
+  }
+
+  .requests-table thead th {
+    padding: 0.6rem 0.5rem;
+    font-size: 0.7rem;
+  }
+
+  .requests-table tbody td {
+    padding: 0.6rem 0.5rem;
+  }
+}
+
+@media (max-width: 768px) {
+  .contract-request-approvals {
+    padding: 0.25rem;
+  }
+
+  .page-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 1rem;
+  }
+
+  .requests-table {
+    min-width: 1000px;
+  }
+
+  .modal {
+    width: 95%;
+  }
+
+  .answer-row {
+    grid-template-columns: 1fr;
+  }
+}

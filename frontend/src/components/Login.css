@@ -1,0 +1,189 @@
+.login-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 100vh;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  padding: 20px;
+}
+
+.login-card {
+  background: white;
+  padding: 40px;
+  border-radius: 10px;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+  width: 100%;
+  max-width: 400px;
+  text-align: center;
+}
+
+.login-card h1 {
+  color: #333;
+  margin-bottom: 10px;
+  font-size: 32px;
+  font-weight: bold;
+}
+
+.login-card h2 {
+  color: #4a4a4a;
+  margin-bottom: 30px;
+  font-size: 20px;
+  font-weight: normal;
+}
+
+.form-group {
+  margin-bottom: 20px;
+  text-align: left;
+}
+
+.form-group label {
+  display: block;
+  margin-bottom: 5px;
+  color: #333;
+  font-weight: 500;
+}
+
+.form-group input {
+  width: 100%;
+  padding: 12px;
+  border: 2px solid #e1e5e9;
+  border-radius: 5px;
+  font-size: 16px;
+  transition: border-color 0.3s;
+}
+
+.form-group input:focus {
+  outline: none;
+  border-color: #007bff;
+}
+
+.login-button {
+  width: 100%;
+  padding: 12px;
+  background-color: #007bff;
+  color: white;
+  border: none;
+  border-radius: 5px;
+  font-size: 16px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 0.3s;
+  margin-bottom: 20px;
+}
+
+.login-button:hover:not(:disabled) {
+  background-color: #0056b3;
+}
+
+.login-button:disabled {
+  background-color: #6c757d;
+  cursor: not-allowed;
+}
+
+.error-message {
+  background-color: #f8d7da;
+  color: #721c24;
+  padding: 10px;
+  border-radius: 5px;
+  margin-bottom: 20px;
+  border: 1px solid #f5c6cb;
+}
+
+.demo-credentials {
+  background-color: #f8f9fa;
+  padding: 20px;
+  border-radius: 8px;
+  border: 1px solid #e9ecef;
+  text-align: left;
+}
+
+.demo-credentials h3 {
+  color: #333;
+  margin-bottom: 20px;
+  font-size: 18px;
+  text-align: center;
+}
+
+.super-admin-section {
+  margin-bottom: 25px;
+  padding: 15px;
+  background: linear-gradient(135deg, #dc3545 0%, #c82333 100%);
+  border-radius: 8px;
+  color: white;
+}
+
+.super-admin-section h4 {
+  color: white;
+  margin-bottom: 15px;
+  font-size: 16px;
+  text-align: center;
+}
+
+.super-admin-section .role-card {
+  background: rgba(255,255,255,0.1);
+  border-left-color: white;
+}
+
+.super-admin-section .role-card h5,
+.super-admin-section .role-card p {
+  color: white;
+}
+
+.company-section {
+  margin-bottom: 25px;
+  padding: 15px;
+  background: #f8f9fa;
+  border-radius: 8px;
+  border: 1px solid #e9ecef;
+}
+
+.company-section h4 {
+  margin-bottom: 15px;
+  color: #333;
+  font-size: 16px;
+  text-align: center;
+}
+
+.role-credentials {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
+}
+
+.role-card {
+  background: white;
+  padding: 15px;
+  border-radius: 8px;
+  border-left: 4px solid;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.role-card.admin {
+  border-left-color: #dc3545;
+}
+
+.role-card.lawyer {
+  border-left-color: #007bff;
+}
+
+.role-card.user {
+  border-left-color: #28a745;
+}
+
+.role-card h4,
+.role-card h5 {
+  margin-bottom: 10px;
+  font-size: 14px;
+  color: #333;
+}
+
+.role-card p {
+  margin-bottom: 5px;
+  color: #4a4a4a;
+  font-size: 13px;
+}
+
+.role-card p em {
+  color: #6c757d;
+  font-size: 12px;
+}
