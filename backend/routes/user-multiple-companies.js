@@ -277,5 +277,139 @@ router.get('/user/:userId/companies', authenticate, requireSuperAdmin, async (re
   }
 });
 
+// Editar información de un usuario
+router.put('/edit-user/:userId',
+  [
+    body('name').optional().notEmpty().withMessage('El nombre no puede estar vacío'),
+    body('email').optional().isEmail().withMessage('Email inválido'),
+    body('role').optional().isIn(['super_admin', 'admin', 'lawyer', 'requester', 'talento_humano', 'colaboradores']).withMessage('Rol inválido')
+  ],
+  authenticate,
+  requireSuperAdmin,
+  async (req, res) => {
+    try {
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) {
+        return res.status(400).json({ errors: errors.array() });
+      }
+
+      const { userId } = req.params;
+      const { name, email, role } = req.body;
+
+      const user = await User.findById(userId);
+      if (!user) {
+        return res.status(404).json({ error: 'Usuario no encontrado' });
+      }
+
+      // Verificar si el email ya existe (si se está cambiando)
+      if (email && email !== user.email) {
+        const existingUser = await User.findOne({ email });
+        if (existingUser) {
+          return res.status(400).json({ error: 'El email ya está registrado' });
+        }
+      }
+
+      // Actualizar campos
+      if (name) user.name = name;
+      if (email) user.email = email;
+      if (role) user.role = role;
+
+      await user.save();
+
+      res.json({
+        message: 'Usuario actualizado exitosamente',
+        user: {
+          id: user._id,
+          email: user.email,
+          name: user.name,
+          role: user.role,
+          active: user.active
+        }
+      });
+    } catch (error) {
+      console.error('Error updating user:', error);
+      res.status(500).json({ error: 'Error al actualizar usuario' });
+    }
+  }
+);
+
+// Desactivar/activar usuario
+router.patch('/toggle-user-status/:userId',
+  authenticate,
+  requireSuperAdmin,
+  async (req, res) => {
+    try {
+      const { userId } = req.params;
+
+      const user = await User.findById(userId);
+      if (!user) {
+        return res.status(404).json({ error: 'Usuario no encontrado' });
+      }
+
+      // Toggle del estado activo
+      user.active = !user.active;
+      await user.save();
+
+      res.json({
+        message: `Usuario ${user.active ? 'activado' : 'desactivado'} exitosamente`,
+        user: {
+          id: user._id,
+          email: user.email,
+          name: user.name,
+          role: user.role,
+          active: user.active
+        }
+      });
+    } catch (error) {
+      console.error('Error toggling user status:', error);
+      res.status(500).json({ error: 'Error al cambiar estado del usuario' });
+    }
+  }
+);
+
+// Eliminar usuario (soft delete - solo desactiva)
+router.delete('/delete-user/:userId',
+  authenticate,
+  requireSuperAdmin,
+  async (req, res) => {
+    try {
+      const { userId } = req.params;
+
+      const user = await User.findById(userId);
+      if (!user) {
+        return res.status(404).json({ error: 'Usuario no encontrado' });
+      }
+
+      // Prevenir que el super admin se elimine a sí mismo
+      if (userId === req.user.id) {
+        return res.status(400).json({ error: 'No puedes eliminar tu propia cuenta' });
+      }
+
+      // Desactivar todas las relaciones UserCompany
+      await UserCompany.updateMany(
+        { user: userId },
+        { isActive: false }
+      );
+
+      // Desactivar usuario
+      user.active = false;
+      await user.save();
+
+      res.json({
+        message: 'Usuario eliminado exitosamente',
+        user: {
+          id: user._id,
+          email: user.email,
+          name: user.name,
+          active: user.active
+        }
+      });
+    } catch (error) {
+      console.error('Error deleting user:', error);
+      res.status(500).json({ error: 'Error al eliminar usuario' });
+    }
+  }
+);
+
 module.exports = router;
 

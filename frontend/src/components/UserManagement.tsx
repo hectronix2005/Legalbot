@@ -61,8 +61,15 @@ const UserManagement: React.FC = () => {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showPermissionsModal, setShowPermissionsModal] = useState(false);
   const [showUserInfoModal, setShowUserInfoModal] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
   const [selectedUserCompany, setSelectedUserCompany] = useState<UserCompany | null>(null);
   const [expandedUsers, setExpandedUsers] = useState<Set<string>>(new Set());
+  const [editUser, setEditUser] = useState({
+    id: '',
+    name: '',
+    email: '',
+    role: 'requester'
+  });
 
   // Filtros y ordenamiento
   const [filterText, setFilterText] = useState('');
@@ -220,6 +227,60 @@ const UserManagement: React.FC = () => {
       }
       return newSet;
     });
+  };
+
+  // Abrir modal de edición de usuario
+  const openEditModal = (user: User) => {
+    setEditUser({
+      id: user._id,
+      name: user.name,
+      email: user.email,
+      role: user.role
+    });
+    setShowEditModal(true);
+  };
+
+  // Editar información del usuario
+  const handleEditUser = async () => {
+    try {
+      await api.put(`/multi-companies/edit-user/${editUser.id}`, {
+        name: editUser.name,
+        email: editUser.email,
+        role: editUser.role
+      });
+      await fetchData();
+      setShowEditModal(false);
+      alert('Usuario actualizado exitosamente');
+    } catch (error: any) {
+      alert(error.response?.data?.error || 'Error al editar usuario');
+    }
+  };
+
+  // Activar/desactivar usuario
+  const handleToggleUserStatus = async (userId: string, userName: string, isActive: boolean) => {
+    const action = isActive ? 'desactivar' : 'activar';
+    if (!window.confirm(`¿Está seguro de ${action} al usuario ${userName}?`)) return;
+
+    try {
+      await api.patch(`/multi-companies/toggle-user-status/${userId}`);
+      await fetchData();
+      alert(`Usuario ${action === 'desactivar' ? 'desactivado' : 'activado'} exitosamente`);
+    } catch (error: any) {
+      alert(error.response?.data?.error || `Error al ${action} usuario`);
+    }
+  };
+
+  // Eliminar usuario
+  const handleDeleteUser = async (userId: string, userName: string) => {
+    if (!window.confirm(`¿Está seguro de eliminar al usuario ${userName}?\n\nEsta acción desactivará el usuario y todas sus asignaciones a empresas.`)) return;
+
+    try {
+      await api.delete(`/multi-companies/delete-user/${userId}`);
+      await fetchData();
+      alert('Usuario eliminado exitosamente');
+    } catch (error: any) {
+      alert(error.response?.data?.error || 'Error al eliminar usuario');
+    }
   };
 
   // Función para normalizar texto (remover acentos/tildes)
@@ -396,6 +457,9 @@ const UserManagement: React.FC = () => {
                 <span className="user-name-visible">{user.name}</span>
               </div>
               <span className={`role-badge ${user.role}`}>{user.role}</span>
+              <span className={`status-badge ${user.active ? 'active' : 'inactive'}`}>
+                {user.active ? 'Activo' : 'Inactivo'}
+              </span>
               <div className="user-actions">
                 <button
                   className="btn-view-info"
@@ -403,6 +467,27 @@ const UserManagement: React.FC = () => {
                   title="Ver información del usuario"
                 >
                   👁️
+                </button>
+                <button
+                  className="btn-edit"
+                  onClick={() => openEditModal(user)}
+                  title="Editar usuario"
+                >
+                  ✎
+                </button>
+                <button
+                  className={`btn-toggle-status ${user.active ? 'deactivate' : 'activate'}`}
+                  onClick={() => handleToggleUserStatus(user._id, user.name, user.active)}
+                  title={user.active ? 'Desactivar usuario' : 'Activar usuario'}
+                >
+                  {user.active ? '🔒' : '🔓'}
+                </button>
+                <button
+                  className="btn-delete"
+                  onClick={() => handleDeleteUser(user._id, user.name)}
+                  title="Eliminar usuario"
+                >
+                  🗑️
                 </button>
                 <button
                   className="btn-view-companies"
@@ -805,6 +890,66 @@ const UserManagement: React.FC = () => {
                 }}
               >
                 Cerrar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal para editar usuario */}
+      {showEditModal && (
+        <div className="modal-overlay" onClick={() => setShowEditModal(false)}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+            <h2>Editar Usuario</h2>
+            <div className="modal-body">
+              <div className="form-group">
+                <label>Nombre:</label>
+                <input
+                  type="text"
+                  value={editUser.name}
+                  onChange={(e) => setEditUser({ ...editUser, name: e.target.value })}
+                  placeholder="Nombre completo del usuario"
+                />
+              </div>
+
+              <div className="form-group">
+                <label>Email:</label>
+                <input
+                  type="email"
+                  value={editUser.email}
+                  onChange={(e) => setEditUser({ ...editUser, email: e.target.value })}
+                  placeholder="correo@ejemplo.com"
+                />
+              </div>
+
+              <div className="form-group">
+                <label>Rol:</label>
+                <select
+                  value={editUser.role}
+                  onChange={(e) => setEditUser({ ...editUser, role: e.target.value })}
+                >
+                  <option value="requester">Usuario</option>
+                  <option value="lawyer">Abogado</option>
+                  <option value="admin">Administrador</option>
+                  <option value="super_admin">Super Admin</option>
+                  <option value="talento_humano">Talento Humano</option>
+                  <option value="colaboradores">Colaboradores</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="modal-actions">
+              <button
+                className="btn-secondary"
+                onClick={() => setShowEditModal(false)}
+              >
+                Cancelar
+              </button>
+              <button
+                className="btn-primary"
+                onClick={handleEditUser}
+              >
+                Guardar Cambios
               </button>
             </div>
           </div>
