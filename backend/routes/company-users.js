@@ -49,13 +49,13 @@ router.get('/relations', authenticate, requireSuperAdmin, async (req, res) => {
 });
 
 // Asignar usuario a empresa
-router.post('/assign', 
-  authenticate, 
+router.post('/assign',
+  authenticate,
   requireSuperAdmin,
   [
     body('companyId').notEmpty().withMessage('El ID de la empresa es requerido'),
     body('userId').notEmpty().withMessage('El ID del usuario es requerido'),
-    body('role').isIn(['admin', 'lawyer', 'requester']).withMessage('Rol inválido')
+    body('role').isIn(['super_admin', 'admin', 'lawyer', 'requester', 'talento_humano', 'colaboradores']).withMessage('Rol inválido')
   ],
   async (req, res) => {
     try {

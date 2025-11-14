@@ -501,6 +501,9 @@ const UserManagement: React.FC = () => {
                 <option value="requester">Usuario</option>
                 <option value="lawyer">Abogado</option>
                 <option value="admin">Administrador</option>
+                <option value="super_admin">Super Admin</option>
+                <option value="talento_humano">Talento Humano</option>
+                <option value="colaboradores">Colaboradores</option>
               </select>
             </div>
 
@@ -582,6 +585,9 @@ const UserManagement: React.FC = () => {
                 <option value="requester">Usuario</option>
                 <option value="lawyer">Abogado</option>
                 <option value="admin">Administrador</option>
+                <option value="super_admin">Super Admin</option>
+                <option value="talento_humano">Talento Humano</option>
+                <option value="colaboradores">Colaboradores</option>
               </select>
             </div>
 
@@ -690,6 +696,9 @@ const UserManagement: React.FC = () => {
                 <option value="requester">Usuario</option>
                 <option value="lawyer">Abogado</option>
                 <option value="admin">Administrador</option>
+                <option value="super_admin">Super Admin</option>
+                <option value="talento_humano">Talento Humano</option>
+                <option value="colaboradores">Colaboradores</option>
               </select>
             </div>
 

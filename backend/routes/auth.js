@@ -11,7 +11,7 @@ router.post('/register',
     body('email').isEmail().withMessage('Email inválido'),
     body('password').isLength({ min: 6 }).withMessage('La contraseña debe tener al menos 6 caracteres'),
     body('name').notEmpty().withMessage('El nombre es requerido'),
-    body('role').isIn(['admin', 'lawyer', 'requester']).withMessage('Rol inválido')
+    body('role').isIn(['super_admin', 'admin', 'lawyer', 'requester', 'talento_humano', 'colaboradores']).withMessage('Rol inválido')
   ],
   async (req, res) => {
     try {

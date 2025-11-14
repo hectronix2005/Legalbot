@@ -20,7 +20,7 @@ router.get('/companies', authenticate, requireSuperAdmin, async (req, res) => {
 // Obtener todos los usuarios con sus empresas múltiples
 router.get('/users', authenticate, requireSuperAdmin, async (req, res) => {
   try {
-    const users = await User.find({ role: { $ne: 'super_admin' } })
+    const users = await User.find({})
       .select('email name role active createdAt');
     
     // Para cada usuario, obtener sus empresas
@@ -49,7 +49,7 @@ router.post('/assign-user-company',
   [
     body('userId').notEmpty().withMessage('ID de usuario requerido'),
     body('companyId').notEmpty().withMessage('ID de empresa requerido'),
-    body('role').optional().isIn(['admin', 'lawyer', 'requester']).withMessage('Rol inválido'),
+    body('role').optional().isIn(['super_admin', 'admin', 'lawyer', 'requester', 'talento_humano', 'colaboradores']).withMessage('Rol inválido'),
     body('permissions').optional().isObject().withMessage('Permisos deben ser un objeto')
   ],
   authenticate,
@@ -63,13 +63,10 @@ router.post('/assign-user-company',
 
       const { userId, companyId, role = 'requester', permissions = {} } = req.body;
 
-      // Verificar que el usuario existe y no es super admin
+      // Verificar que el usuario existe
       const user = await User.findById(userId);
       if (!user) {
         return res.status(404).json({ error: 'Usuario no encontrado' });
-      }
-      if (user.role === 'super_admin') {
-        return res.status(400).json({ error: 'No se puede asignar empresas al super admin' });
       }
 
       // Verificar que la empresa existe
@@ -207,7 +204,7 @@ router.put('/update-user-company-permissions',
   [
     body('userId').notEmpty().withMessage('ID de usuario requerido'),
     body('companyId').notEmpty().withMessage('ID de empresa requerido'),
-    body('role').optional().isIn(['admin', 'lawyer', 'requester']).withMessage('Rol inválido'),
+    body('role').optional().isIn(['super_admin', 'admin', 'lawyer', 'requester', 'talento_humano', 'colaboradores']).withMessage('Rol inválido'),
     body('permissions').isObject().withMessage('Permisos deben ser un objeto')
   ],
   authenticate,

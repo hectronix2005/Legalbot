@@ -14,7 +14,7 @@ const companyUserSchema = new mongoose.Schema({
   role: {
     type: String,
     required: true,
-    enum: ['admin', 'lawyer', 'requester'],
+    enum: ['super_admin', 'admin', 'lawyer', 'requester', 'talento_humano', 'colaboradores'],
     default: 'requester'
   },
   permissions: {

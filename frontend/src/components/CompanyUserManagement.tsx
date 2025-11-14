@@ -250,7 +250,7 @@ const CompanyUserManagement: React.FC = () => {
             
             <div className="form-group">
               <label>Rol:</label>
-              <select 
+              <select
                 value={newAssignment.role}
                 onChange={(e) => setNewAssignment({...newAssignment, role: e.target.value})}
                 required
@@ -258,6 +258,9 @@ const CompanyUserManagement: React.FC = () => {
                 <option value="requester">Solicitante</option>
                 <option value="lawyer">Abogado</option>
                 <option value="admin">Administrador</option>
+                <option value="super_admin">Super Admin</option>
+                <option value="talento_humano">Talento Humano</option>
+                <option value="colaboradores">Colaboradores</option>
               </select>
             </div>
             
@@ -320,7 +323,7 @@ const CompanyUserManagement: React.FC = () => {
             
             <div className="form-group">
               <label>Rol:</label>
-              <select 
+              <select
                 value={selectedRelation.role}
                 onChange={(e) => setSelectedRelation({...selectedRelation, role: e.target.value})}
                 required
@@ -328,6 +331,9 @@ const CompanyUserManagement: React.FC = () => {
                 <option value="requester">Solicitante</option>
                 <option value="lawyer">Abogado</option>
                 <option value="admin">Administrador</option>
+                <option value="super_admin">Super Admin</option>
+                <option value="talento_humano">Talento Humano</option>
+                <option value="colaboradores">Colaboradores</option>
               </select>
             </div>
             
