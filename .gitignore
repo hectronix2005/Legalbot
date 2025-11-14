@@ -71,8 +71,8 @@ frontend/dist/
 
 # Backend public (build del frontend copiado aquí)
 # Nota: Este directorio se genera durante el build y se incluye en el deploy
-backend/public/*
-!backend/public/.gitkeep
+# backend/public/*
+# !backend/public/.gitkeep
 
 # OS generated files
 .DS_Store
@@ -83,3 +83,30 @@ backend/public/*
 ehthumbs.db
 Thumbs.db
 
+
+# Claude Flow generated files
+.claude/settings.local.json
+.mcp.json
+claude-flow.config.json
+.swarm/
+.hive-mind/
+.claude-flow/
+memory/
+coordination/
+memory/claude-flow-data.json
+memory/sessions/*
+!memory/sessions/README.md
+memory/agents/*
+!memory/agents/README.md
+coordination/memory_bank/*
+coordination/subtasks/*
+coordination/orchestration/*
+*.db
+*.db-journal
+*.db-wal
+*.sqlite
+*.sqlite-journal
+*.sqlite-wal
+claude-flow
+# Removed Windows wrapper files per user request
+hive-mind-prompt-*.txt
