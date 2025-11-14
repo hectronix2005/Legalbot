@@ -5,7 +5,7 @@ interface User {
   id: string;
   name: string;
   email: string;
-  role: 'super_admin' | 'admin' | 'lawyer' | 'requester';
+  role: 'super_admin' | 'admin' | 'lawyer' | 'requester' | 'talento_humano' | 'colaboradores';
   company_id?: string;
   company?: {
     _id: string;
@@ -27,7 +27,7 @@ interface AuthContextType {
   login: (email: string, password: string) => Promise<void>;
   logout: () => void;
   loading: boolean;
-  hasRole: (role: 'super_admin' | 'admin' | 'lawyer' | 'requester') => boolean;
+  hasRole: (role: 'super_admin' | 'admin' | 'lawyer' | 'requester' | 'talento_humano' | 'colaboradores') => boolean;
   isSuperAdmin: () => boolean;
   isAdmin: () => boolean;
   isLawyer: () => boolean;
@@ -66,7 +66,15 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
         // Asegurar que selectedCompanyId esté establecido
         const selectedCompanyId = localStorage.getItem('selectedCompanyId');
-        if (!selectedCompanyId) {
+
+        // SIEMPRE establecer 'ALL' para super_admin (forzar corrección de sesiones antiguas)
+        if (user.role === 'super_admin') {
+          if (selectedCompanyId !== 'ALL') {
+            localStorage.setItem('selectedCompanyId', 'ALL');
+            console.log('✅ Super admin: Forzando selectedCompanyId a ALL (corrigiendo sesión antigua)');
+          }
+        } else if (!selectedCompanyId) {
+          // Para otros roles, solo establecer si no existe
           if (user.companyRoles && Object.keys(user.companyRoles).length > 0) {
             const firstCompanyId = Object.keys(user.companyRoles)[0];
             localStorage.setItem('selectedCompanyId', firstCompanyId);
@@ -74,10 +82,6 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           } else if (user.company_id) {
             localStorage.setItem('selectedCompanyId', user.company_id);
             console.log('✅ Company ID (legacy) establecido al cargar:', user.company_id);
-          } else if (user.role === 'super_admin') {
-            // Super admin puede ver todas las empresas
-            localStorage.setItem('selectedCompanyId', 'ALL');
-            console.log('✅ Super admin: Todas las empresas seleccionadas al cargar (ALL)');
           }
         }
 
@@ -141,7 +145,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     setUser(null);
   };
 
-  const hasRole = (role: 'super_admin' | 'admin' | 'lawyer' | 'requester') => {
+  const hasRole = (role: 'super_admin' | 'admin' | 'lawyer' | 'requester' | 'talento_humano' | 'colaboradores') => {
     return user?.role === role;
   };
 
