@@ -23,10 +23,15 @@ router.get('/supplier/:id/analysis', authenticate, verifyTenant, async (req, res
       userRole: req.user?.role
     });
 
-    const supplier = await Supplier.findOne({
-      _id: req.params.id,
-      company: req.companyId
-    }).populate('third_party_type', 'code label');
+    // Build query - handle super_admin with ALL access
+    const query = { _id: req.params.id };
+    // Only add company filter if companyId is provided AND it's not 'ALL'
+    if (req.companyId && req.companyId !== 'ALL') {
+      query.company = req.companyId;
+    }
+    // If companyId is 'ALL' or null, query all suppliers (no company filter)
+
+    const supplier = await Supplier.findOne(query).populate('third_party_type', 'code label');
 
     if (!supplier) {
       return res.status(404).json({ error: 'Tercero no encontrado' });
@@ -58,10 +63,13 @@ router.get('/supplier/:id/analysis', authenticate, verifyTenant, async (req, res
  */
 router.get('/supplier/:id/suggestions', authenticate, verifyTenant, async (req, res) => {
   try {
-    const supplier = await Supplier.findOne({
-      _id: req.params.id,
-      company: req.companyId
-    }).populate('third_party_type');
+    // Build query - handle super_admin with ALL access
+    const query = { _id: req.params.id };
+    if (req.companyId && req.companyId !== 'ALL') {
+      query.company = req.companyId;
+    }
+
+    const supplier = await Supplier.findOne(query).populate('third_party_type');
 
     if (!supplier) {
       return res.status(404).json({ error: 'Tercero no encontrado' });
@@ -98,11 +106,14 @@ router.post('/supplier/:id/fields', authenticate, verifyTenant, authorize('admin
       return res.status(400).json({ error: 'Se requiere un array de campos' });
     }
 
+    // Build query - handle super_admin with ALL access
+    const query = { _id: req.params.id };
+    if (req.companyId && req.companyId !== 'ALL') {
+      query.company = req.companyId;
+    }
+
     // Verificar permisos
-    const supplier = await Supplier.findOne({
-      _id: req.params.id,
-      company: req.companyId
-    });
+    const supplier = await Supplier.findOne(query);
 
     if (!supplier) {
       return res.status(404).json({ error: 'Tercero no encontrado' });
@@ -131,10 +142,13 @@ router.post('/supplier/:id/fields', authenticate, verifyTenant, authorize('admin
  */
 router.post('/supplier/:id/migrate', authenticate, verifyTenant, authorize('admin', 'super_admin'), async (req, res) => {
   try {
-    const supplier = await Supplier.findOne({
-      _id: req.params.id,
-      company: req.companyId
-    });
+    // Build query - handle super_admin with ALL access
+    const query = { _id: req.params.id };
+    if (req.companyId && req.companyId !== 'ALL') {
+      query.company = req.companyId;
+    }
+
+    const supplier = await Supplier.findOne(query);
 
     if (!supplier) {
       return res.status(404).json({ error: 'Tercero no encontrado' });
@@ -163,7 +177,13 @@ router.post('/migrate-all', authenticate, verifyTenant, authorize('admin', 'supe
   try {
     const { dryRun = false } = req.body;
 
-    const suppliers = await Supplier.find({ company: req.companyId });
+    // Build query - handle super_admin with ALL access
+    const query = {};
+    if (req.companyId && req.companyId !== 'ALL') {
+      query.company = req.companyId;
+    }
+
+    const suppliers = await Supplier.find(query);
 
     const results = {
       total: suppliers.length,
@@ -250,10 +270,13 @@ router.get('/validate-template/:supplierId/:templateId', authenticate, async (re
  */
 router.get('/stats', authenticate, verifyTenant, async (req, res) => {
   try {
-    const suppliers = await Supplier.find({
-      company: req.companyId,
-      active: true
-    }).populate('third_party_type', 'code label');
+    // Build query - handle super_admin with ALL access
+    const query = { active: true };
+    if (req.companyId && req.companyId !== 'ALL') {
+      query.company = req.companyId;
+    }
+
+    const suppliers = await Supplier.find(query).populate('third_party_type', 'code label');
 
     const stats = {
       total: suppliers.length,
@@ -367,11 +390,14 @@ router.post('/supplier/:id/merge-fields', authenticate, verifyTenant, authorize(
       userId: req.user._id
     });
 
+    // Build query - handle super_admin with ALL access
+    const query = { _id: req.params.id };
+    if (req.companyId && req.companyId !== 'ALL') {
+      query.company = req.companyId;
+    }
+
     // Verificar que el tercero existe y pertenece a la empresa
-    const supplier = await Supplier.findOne({
-      _id: req.params.id,
-      company: req.companyId
-    });
+    const supplier = await Supplier.findOne(query);
 
     if (!supplier) {
       return res.status(404).json({ error: 'Tercero no encontrado' });
@@ -455,11 +481,14 @@ router.post('/merge-fields-bulk', authenticate, verifyTenant, authorize('admin',
       companyId: req.companyId
     });
 
+    // Build query - handle super_admin with ALL access
+    const query = { third_party_type: thirdPartyTypeId };
+    if (req.companyId && req.companyId !== 'ALL') {
+      query.company = req.companyId;
+    }
+
     // Obtener todos los terceros del mismo tipo
-    const suppliers = await Supplier.find({
-      company: req.companyId,
-      third_party_type: thirdPartyTypeId
-    });
+    const suppliers = await Supplier.find(query);
 
     console.log(`📊 [BULK-MERGE] Found ${suppliers.length} suppliers of this type`);
 
