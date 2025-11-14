@@ -121,11 +121,18 @@ class FieldManagementService {
    * Obtiene todos los campos requeridos por plantillas de un tipo de tercero
    */
   static async getRequiredFieldsForType(thirdPartyTypeCode, companyId) {
-    const templates = await ContractTemplate.find({
-      company: companyId,
+    // Build query - handle super_admin with ALL access
+    const query = {
       third_party_type: thirdPartyTypeCode,
       active: true
-    }).select('name category fields');
+    };
+    // Only add company filter if companyId is provided AND it's not 'ALL'
+    if (companyId && companyId !== 'ALL') {
+      query.company = companyId;
+    }
+    // If companyId is 'ALL' or null, query all templates (no company filter)
+
+    const templates = await ContractTemplate.find(query).select('name category fields');
 
     const requiredFieldsMap = new Map();
 
@@ -357,13 +364,18 @@ class FieldManagementService {
       return [];
     }
 
-    // Buscar terceros similares del mismo tipo
-    const similarSuppliers = await Supplier.find({
-      company: companyId,
+    // Build query - handle super_admin with ALL access
+    const query = {
       third_party_type: supplier.third_party_type,
       _id: { $ne: supplier._id },
       active: true
-    }).limit(10);
+    };
+    if (companyId && companyId !== 'ALL') {
+      query.company = companyId;
+    }
+
+    // Buscar terceros similares del mismo tipo
+    const similarSuppliers = await Supplier.find(query).limit(10);
 
     const fieldFrequency = new Map();
 
