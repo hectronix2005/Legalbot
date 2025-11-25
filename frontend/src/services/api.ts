@@ -198,4 +198,124 @@ export const updateProfileField = async (profileId: string, templateVariable: st
   return response.data;
 };
 
+// ===================================================================
+// CONSOLIDACIÓN DE CONTRATOS POR TERCERO
+// ===================================================================
+
+export interface ConsolidatedSupplierContract {
+  _id: string;
+  contract_number: string;
+  title: string;
+  status: string;
+  createdAt: string;
+  template?: {
+    _id: string;
+    name: string;
+    category: string;
+  };
+  generated_by?: {
+    _id: string;
+    name: string;
+    email: string;
+  };
+  company?: string;
+  company_name?: string;
+}
+
+export interface ConsolidatedSupplierProfile {
+  _id: string;
+  template: {
+    _id: string;
+    name: string;
+    category: string;
+  };
+  role_in_template: string;
+  role_label: string;
+  usage_count: number;
+  last_used_at?: string;
+  is_complete: boolean;
+}
+
+export interface ConsolidatedSupplierData {
+  supplier: {
+    _id: string;
+    legal_name: string;
+    legal_name_short?: string;
+    full_name?: string;
+    identification_type: string;
+    identification_number: string;
+    email?: string;
+    phone?: string;
+    address?: string;
+    city?: string;
+    active: boolean;
+    third_party_type?: {
+      _id: string;
+      code: string;
+      label: string;
+      icon: string;
+    };
+    company?: {
+      _id: string;
+      name: string;
+    };
+  };
+  contracts: ConsolidatedSupplierContract[];
+  profiles: ConsolidatedSupplierProfile[];
+  stats: {
+    total: number;
+    by_status: Record<string, number>;
+  };
+  profile_count: number;
+}
+
+export interface ConsolidatedSuppliersResponse {
+  success: boolean;
+  totals: {
+    suppliers_count: number;
+    total_contracts: number;
+    suppliers_with_contracts: number;
+    suppliers_without_contracts: number;
+  };
+  data: ConsolidatedSupplierData[];
+}
+
+export interface SupplierContractsResponse {
+  success: boolean;
+  supplier: any;
+  contracts: ConsolidatedSupplierContract[];
+  profiles: ConsolidatedSupplierProfile[];
+  stats: {
+    total_contracts: number;
+    by_status: Record<string, number>;
+    by_template: Record<string, number>;
+    recent_activity: ConsolidatedSupplierContract[];
+  };
+}
+
+// Obtener todos los terceros con sus contratos consolidados
+export const getConsolidatedSupplierContracts = async (params?: {
+  search?: string;
+  includeInactive?: boolean;
+  withContractsOnly?: boolean;
+  sortBy?: 'contract_count' | 'name' | 'recent';
+}): Promise<ConsolidatedSuppliersResponse> => {
+  const queryParams = new URLSearchParams();
+  if (params?.search) queryParams.append('search', params.search);
+  if (params?.includeInactive) queryParams.append('includeInactive', 'true');
+  if (params?.withContractsOnly) queryParams.append('withContractsOnly', 'true');
+  if (params?.sortBy) queryParams.append('sortBy', params.sortBy);
+
+  const queryString = queryParams.toString();
+  const url = `/suppliers/contracts/consolidated${queryString ? `?${queryString}` : ''}`;
+  const response = await api.get(url);
+  return response.data;
+};
+
+// Obtener contratos de un tercero específico
+export const getSupplierContracts = async (supplierId: string): Promise<SupplierContractsResponse> => {
+  const response = await api.get(`/suppliers/${supplierId}/contracts`);
+  return response.data;
+};
+
 export default api;

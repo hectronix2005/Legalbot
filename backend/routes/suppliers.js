@@ -916,4 +916,247 @@ router.delete('/:id/permanent',
   }
 );
 
+// ===================================================================
+// CONSOLIDACIÓN DE CONTRATOS POR TERCERO
+// ===================================================================
+
+/**
+ * GET /api/suppliers/contracts/consolidated
+ * Obtener todos los terceros con sus contratos asociados
+ * Respeta permisos de empresa según el rol del usuario
+ */
+router.get('/contracts/consolidated',
+  authenticate,
+  verifyTenant,
+  async (req, res) => {
+    try {
+      const { search, includeInactive, sortBy = 'contract_count' } = req.query;
+
+      // Construir filtro base para terceros
+      const supplierFilter = {
+        deleted: { $ne: true }
+      };
+
+      // Filtrar por empresa según permisos
+      if (req.companyId && req.companyId !== 'ALL') {
+        supplierFilter.company = req.companyId;
+      }
+
+      // Por defecto, solo terceros activos
+      if (includeInactive !== 'true') {
+        supplierFilter.active = true;
+      }
+
+      // Búsqueda por nombre o identificación
+      if (search && search.trim()) {
+        const searchRegex = new RegExp(search.trim(), 'i');
+        supplierFilter.$or = [
+          { legal_name: searchRegex },
+          { identification_number: searchRegex },
+          { email: searchRegex }
+        ];
+      }
+
+      // Obtener terceros
+      const suppliers = await Supplier.find(supplierFilter)
+        .populate('third_party_type', 'code label icon')
+        .populate('company', 'name')
+        .select('legal_name legal_name_short full_name identification_type identification_number email phone address city active third_party_type company')
+        .lean();
+
+      // Para cada tercero, buscar contratos asociados
+      const consolidatedData = await Promise.all(
+        suppliers.map(async (supplier) => {
+          // Construir filtro de contratos
+          const contractFilter = {
+            $or: [
+              { content: { $regex: supplier.legal_name, $options: 'i' } },
+              { content: { $regex: supplier.identification_number, $options: 'i' } }
+            ]
+          };
+
+          // Filtrar contratos por empresa si es necesario
+          if (req.companyId && req.companyId !== 'ALL') {
+            contractFilter.company = req.companyId;
+          }
+
+          // Buscar contratos
+          const contracts = await Contract.find(contractFilter)
+            .populate('template', 'name category')
+            .populate('generated_by', 'name email')
+            .select('contract_number title status createdAt template generated_by company company_name')
+            .sort({ createdAt: -1 })
+            .lean();
+
+          // Buscar perfiles de tercero (ThirdPartyProfile)
+          const ThirdPartyProfile = require('../models/ThirdPartyProfile');
+          const profileFilter = { supplier: supplier._id, active: true };
+          if (req.companyId && req.companyId !== 'ALL') {
+            profileFilter.company = req.companyId;
+          }
+
+          const profiles = await ThirdPartyProfile.find(profileFilter)
+            .populate('template', 'name category')
+            .select('template role_in_template role_label usage_count last_used_at completeness is_complete')
+            .lean();
+
+          // Estadísticas de contratos por estado
+          const contractStats = {
+            total: contracts.length,
+            by_status: {}
+          };
+
+          contracts.forEach(contract => {
+            const status = contract.status || 'unknown';
+            contractStats.by_status[status] = (contractStats.by_status[status] || 0) + 1;
+          });
+
+          return {
+            supplier: {
+              _id: supplier._id,
+              legal_name: supplier.legal_name,
+              legal_name_short: supplier.legal_name_short,
+              full_name: supplier.full_name,
+              identification_type: supplier.identification_type,
+              identification_number: supplier.identification_number,
+              email: supplier.email,
+              phone: supplier.phone,
+              address: supplier.address,
+              city: supplier.city,
+              active: supplier.active,
+              third_party_type: supplier.third_party_type,
+              company: supplier.company
+            },
+            contracts: contracts,
+            profiles: profiles,
+            stats: contractStats,
+            profile_count: profiles.length
+          };
+        })
+      );
+
+      // Filtrar solo terceros con al menos un contrato (opcional)
+      let filteredData = consolidatedData;
+      if (req.query.withContractsOnly === 'true') {
+        filteredData = consolidatedData.filter(item => item.stats.total > 0);
+      }
+
+      // Ordenar según el criterio solicitado
+      if (sortBy === 'contract_count') {
+        filteredData.sort((a, b) => b.stats.total - a.stats.total);
+      } else if (sortBy === 'name') {
+        filteredData.sort((a, b) => (a.supplier.legal_name || '').localeCompare(b.supplier.legal_name || ''));
+      } else if (sortBy === 'recent') {
+        filteredData.sort((a, b) => {
+          const aDate = a.contracts[0]?.createdAt || new Date(0);
+          const bDate = b.contracts[0]?.createdAt || new Date(0);
+          return new Date(bDate) - new Date(aDate);
+        });
+      }
+
+      // Calcular totales
+      const totals = {
+        suppliers_count: filteredData.length,
+        total_contracts: filteredData.reduce((sum, item) => sum + item.stats.total, 0),
+        suppliers_with_contracts: filteredData.filter(item => item.stats.total > 0).length,
+        suppliers_without_contracts: filteredData.filter(item => item.stats.total === 0).length
+      };
+
+      res.json({
+        success: true,
+        totals,
+        data: filteredData
+      });
+    } catch (error) {
+      console.error('Error al obtener contratos consolidados por tercero:', error);
+      res.status(500).json({ error: 'Error al obtener datos consolidados' });
+    }
+  }
+);
+
+/**
+ * GET /api/suppliers/:id/contracts
+ * Obtener todos los contratos de un tercero específico
+ */
+router.get('/:id/contracts',
+  authenticate,
+  verifyTenant,
+  async (req, res) => {
+    try {
+      // Buscar el tercero
+      const supplierQuery = { _id: req.params.id };
+      if (req.companyId && req.companyId !== 'ALL') {
+        supplierQuery.company = req.companyId;
+      }
+
+      const supplier = await Supplier.findOne(supplierQuery)
+        .populate('third_party_type', 'code label icon')
+        .lean();
+
+      if (!supplier) {
+        return res.status(404).json({ error: 'Tercero no encontrado' });
+      }
+
+      // Buscar contratos
+      const contractFilter = {
+        $or: [
+          { content: { $regex: supplier.legal_name, $options: 'i' } },
+          { content: { $regex: supplier.identification_number, $options: 'i' } }
+        ]
+      };
+
+      if (req.companyId && req.companyId !== 'ALL') {
+        contractFilter.company = req.companyId;
+      }
+
+      const contracts = await Contract.find(contractFilter)
+        .populate('template', 'name category third_party_type')
+        .populate('generated_by', 'name email')
+        .select('contract_number title content description status createdAt template generated_by company company_name file_path')
+        .sort({ createdAt: -1 })
+        .lean();
+
+      // Buscar perfiles
+      const ThirdPartyProfile = require('../models/ThirdPartyProfile');
+      const profileFilter = { supplier: supplier._id, active: true };
+      if (req.companyId && req.companyId !== 'ALL') {
+        profileFilter.company = req.companyId;
+      }
+
+      const profiles = await ThirdPartyProfile.find(profileFilter)
+        .populate('template', 'name category')
+        .lean();
+
+      // Estadísticas
+      const stats = {
+        total_contracts: contracts.length,
+        by_status: {},
+        by_template: {},
+        recent_activity: contracts.slice(0, 5)
+      };
+
+      contracts.forEach(contract => {
+        // Por estado
+        const status = contract.status || 'unknown';
+        stats.by_status[status] = (stats.by_status[status] || 0) + 1;
+
+        // Por plantilla
+        const templateName = contract.template?.name || 'Sin plantilla';
+        stats.by_template[templateName] = (stats.by_template[templateName] || 0) + 1;
+      });
+
+      res.json({
+        success: true,
+        supplier,
+        contracts,
+        profiles,
+        stats
+      });
+    } catch (error) {
+      console.error('Error al obtener contratos del tercero:', error);
+      res.status(500).json({ error: 'Error al obtener contratos del tercero' });
+    }
+  }
+);
+
 module.exports = router;

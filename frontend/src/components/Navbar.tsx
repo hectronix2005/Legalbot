@@ -25,7 +25,7 @@ const Navbar: React.FC = () => {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  const adminPaths = ['/companies', '/user-management', '/company-users', '/third-parties', '/contract-categories', '/admin'];
+  const adminPaths = ['/companies', '/user-management', '/company-users', '/third-parties', '/contract-categories', '/supplier-contracts', '/admin'];
   const isAdminActive = adminPaths.some(path => location.pathname === path);
 
   return (
@@ -149,6 +149,16 @@ const Navbar: React.FC = () => {
                     onClick={() => setAdminDropdownOpen(false)}
                   >
                     Categorías de Contratos
+                  </Link>
+                </RoleGuard>
+
+                <RoleGuard allowedRoles={['super_admin', 'admin', 'lawyer']}>
+                  <Link
+                    to="/supplier-contracts"
+                    className={isActive('/supplier-contracts') ? 'active' : ''}
+                    onClick={() => setAdminDropdownOpen(false)}
+                  >
+                    📋 Contratos por Tercero
                   </Link>
                 </RoleGuard>
               </div>
