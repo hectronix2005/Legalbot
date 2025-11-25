@@ -360,8 +360,18 @@ router.post('/:id/generate-contract',
         return res.status(404).json({ error: 'Plantilla no encontrada' });
       }
 
-      if (!template.word_file_path || !fs.existsSync(template.word_file_path)) {
-        return res.status(404).json({ error: 'El archivo Word de la plantilla no existe' });
+      if (!template.word_file_path) {
+        console.log('❌ [generate-contract] La plantilla no tiene word_file_path definido');
+        return res.status(404).json({ error: 'Esta plantilla no tiene un archivo Word asociado. Por favor, suba un archivo Word a la plantilla.' });
+      }
+
+      if (!fs.existsSync(template.word_file_path)) {
+        console.log('❌ [generate-contract] El archivo Word no existe en el filesystem:', template.word_file_path);
+        console.log('⚠️  Esto puede ocurrir después de un reinicio del servidor (Heroku ephemeral filesystem)');
+        return res.status(404).json({
+          error: 'El archivo Word de la plantilla no se encuentra en el servidor. Esto puede ocurrir después de un reinicio. Por favor, vuelva a subir el archivo Word a la plantilla usando la opción "Reemplazar Word".',
+          details: 'Heroku ephemeral filesystem - los archivos se pierden al reiniciar'
+        });
       }
 
       console.log('🚀 GENERANDO CONTRATO DESDE PLANTILLA:', template.name);
