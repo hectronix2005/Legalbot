@@ -224,7 +224,7 @@ const UnifiedWordTemplateUpload: React.FC<UnifiedWordTemplateUploadProps> = ({
         }
       });
 
-      const { filePath, content, cloudinaryUrl, cloudinaryPublicId } = uploadResponse.data;
+      const { filePath, content, gridfsFileId, gridfsFileName, cloudinaryUrl, cloudinaryPublicId } = uploadResponse.data;
 
       // Paso 2: Crear plantilla con los datos
       const templateData: any = {
@@ -235,7 +235,10 @@ const UnifiedWordTemplateUpload: React.FC<UnifiedWordTemplateUploadProps> = ({
         fields: detectedVariables,
         wordFilePath: filePath,
         wordFileOriginalName: file.name,
-        // Cloud storage data for persistent storage
+        // GridFS storage data (preferred - MongoDB native)
+        gridfsFileId: gridfsFileId || null,
+        gridfsFileName: gridfsFileName || null,
+        // Legacy Cloudinary data (for backward compatibility)
         cloudinaryUrl: cloudinaryUrl || null,
         cloudinaryPublicId: cloudinaryPublicId || null
       };

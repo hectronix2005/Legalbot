@@ -12,6 +12,7 @@ const ActivityLog = require('../models/ActivityLog');
 const { getAllThirdPartyTypes, getThirdPartyConfig } = require('../config/thirdPartyTypes');
 const ThirdPartyTypeConfig = require('../models/ThirdPartyTypeConfig');
 const cloudStorage = require('../services/cloudStorageService');
+const gridfsStorage = require('../services/gridfsStorageService');
 
 // Configurar multer
 const storage = multer.diskStorage({
@@ -143,13 +144,16 @@ router.post('/upload-word',
       const fileBuffer = fs.readFileSync(req.file.path);
       const result = await extractYellowHighlightedFields(fileBuffer);
 
-      // Upload to Cloudinary for persistent storage
-      let cloudinaryData = null;
+      // Upload to MongoDB GridFS for persistent storage (preferred over Cloudinary)
+      let gridfsData = null;
       try {
-        cloudinaryData = await cloudStorage.uploadFile(req.file.path, req.file.originalname);
-        console.log('☁️  Archivo subido a Cloudinary:', cloudinaryData?.url);
-      } catch (cloudError) {
-        console.warn('⚠️  No se pudo subir a Cloudinary (continuando con almacenamiento local):', cloudError.message);
+        gridfsData = await gridfsStorage.uploadFile(req.file.path, req.file.originalname, {
+          uploadedBy: req.user.id,
+          company: req.companyId
+        });
+        console.log('📦 Archivo subido a GridFS:', gridfsData?.fileId);
+      } catch (gridfsError) {
+        console.warn('⚠️  No se pudo subir a GridFS (continuando con almacenamiento local):', gridfsError.message);
       }
 
       res.json({
@@ -160,9 +164,12 @@ router.post('/upload-word',
         content: result.content,
         fields: result.fields,
         messages: result.messages,
-        // Cloud storage info
-        cloudinaryUrl: cloudinaryData?.url || null,
-        cloudinaryPublicId: cloudinaryData?.publicId || null
+        // GridFS storage info (preferred)
+        gridfsFileId: gridfsData?.fileId || null,
+        gridfsFileName: gridfsData?.fileName || null,
+        // Legacy Cloudinary (null)
+        cloudinaryUrl: null,
+        cloudinaryPublicId: null
       });
     } catch (error) {
       console.error('Error al procesar archivo Word:', error);
@@ -214,20 +221,40 @@ router.get('/:id/download-word', authenticate, verifyTenant, async (req, res) =>
       return res.status(404).json({ error: 'Plantilla no encontrada' });
     }
 
-    // Check if template has a file (local or cloud)
-    if (!template.word_file_path && !template.cloudinary_url) {
+    // Check if template has a file (GridFS, Cloudinary, or local)
+    if (!template.word_file_path && !template.cloudinary_url && !template.gridfs_file_id) {
       return res.status(404).json({ error: 'Esta plantilla no tiene un archivo Word asociado' });
     }
 
     console.log('📥 Descargando archivo Word de plantilla:', template.name);
 
-    // If cloudinary URL exists, redirect to it
+    // Priority 1: GridFS (preferred - MongoDB native)
+    if (template.gridfs_file_id) {
+      console.log('📦 Descargando desde GridFS:', template.gridfs_file_id);
+      try {
+        const downloadStream = await gridfsStorage.getDownloadStream(template.gridfs_file_id);
+        const fileName = template.word_file_original_name || template.gridfs_file_name || `${template.name}.docx`;
+
+        res.set({
+          'Content-Type': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+          'Content-Disposition': `attachment; filename="${encodeURIComponent(fileName)}"`
+        });
+
+        downloadStream.pipe(res);
+        return;
+      } catch (gridfsError) {
+        console.error('⚠️ Error descargando de GridFS:', gridfsError.message);
+        // Fall through to try other methods
+      }
+    }
+
+    // Priority 2: Cloudinary (legacy)
     if (template.cloudinary_url) {
       console.log('☁️  Redirigiendo a Cloudinary:', template.cloudinary_url);
       return res.redirect(template.cloudinary_url);
     }
 
-    // Check if local file exists
+    // Priority 3: Local file (last resort)
     if (!fs.existsSync(template.word_file_path)) {
       return res.status(404).json({
         error: 'El archivo Word no se encuentra en el servidor. Puede que se haya perdido tras un reinicio.',
@@ -283,14 +310,24 @@ router.post('/:id/replace-word',
 
       console.log('🔄 Reemplazando archivo Word de plantilla:', template.name);
       console.log('📁 Archivo anterior (local):', template.word_file_path);
-      console.log('☁️  Archivo anterior (cloud):', template.cloudinary_url);
+      console.log('📦 Archivo anterior (GridFS):', template.gridfs_file_id);
       console.log('📁 Archivo nuevo:', req.file.path);
 
-      // Delete old file from Cloudinary if exists
+      // Delete old file from GridFS if exists
+      if (template.gridfs_file_id) {
+        try {
+          await gridfsStorage.deleteFile(template.gridfs_file_id);
+          console.log('📦 Archivo anterior eliminado de GridFS');
+        } catch (gridfsError) {
+          console.warn('⚠️  No se pudo eliminar archivo anterior de GridFS:', gridfsError.message);
+        }
+      }
+
+      // Delete old file from Cloudinary if exists (legacy cleanup)
       if (template.cloudinary_public_id) {
         try {
           await cloudStorage.deleteFile(template.cloudinary_public_id);
-          console.log('☁️  Archivo anterior eliminado de Cloudinary');
+          console.log('☁️  Archivo anterior eliminado de Cloudinary (legacy)');
         } catch (cloudError) {
           console.warn('⚠️  No se pudo eliminar archivo anterior de Cloudinary:', cloudError.message);
         }
@@ -306,20 +343,27 @@ router.post('/:id/replace-word',
         }
       }
 
-      // Upload new file to Cloudinary
-      let cloudinaryData = null;
+      // Upload new file to GridFS (preferred)
+      let gridfsData = null;
       try {
-        cloudinaryData = await cloudStorage.uploadFile(req.file.path, req.file.originalname);
-        console.log('☁️  Nuevo archivo subido a Cloudinary:', cloudinaryData?.url);
-      } catch (cloudError) {
-        console.warn('⚠️  No se pudo subir a Cloudinary (continuando con almacenamiento local):', cloudError.message);
+        gridfsData = await gridfsStorage.uploadFile(req.file.path, req.file.originalname, {
+          uploadedBy: req.user.id,
+          company: req.companyId,
+          templateId: template._id.toString()
+        });
+        console.log('📦 Nuevo archivo subido a GridFS:', gridfsData?.fileId);
+      } catch (gridfsError) {
+        console.warn('⚠️  No se pudo subir a GridFS (continuando con almacenamiento local):', gridfsError.message);
       }
 
       // Actualizar plantilla con nuevo archivo
       template.word_file_path = req.file.path;
       template.word_file_original_name = req.file.originalname;
-      template.cloudinary_url = cloudinaryData?.url || null;
-      template.cloudinary_public_id = cloudinaryData?.publicId || null;
+      template.gridfs_file_id = gridfsData?.fileId || null;
+      template.gridfs_file_name = gridfsData?.fileName || null;
+      // Clear legacy cloudinary fields
+      template.cloudinary_url = null;
+      template.cloudinary_public_id = null;
       await template.save();
 
       console.log('✅ Archivo Word reemplazado exitosamente');
@@ -336,7 +380,7 @@ router.post('/:id/replace-word',
       res.json({
         message: 'Archivo Word reemplazado exitosamente',
         template: template,
-        cloudStorage: cloudinaryData ? 'uploaded' : 'local_only'
+        storage: gridfsData ? 'gridfs' : 'local_only'
       });
     } catch (error) {
       console.error('Error al reemplazar archivo Word:', error);
@@ -412,21 +456,38 @@ router.post('/:id/generate-contract',
         return res.status(404).json({ error: 'Plantilla no encontrada' });
       }
 
-      // Check if template file is available (local or cloud)
-      if (!template.word_file_path && !template.cloudinary_url) {
-        console.log('❌ [generate-contract] La plantilla no tiene archivo Word (local ni cloud)');
+      // Check if template file is available (GridFS, Cloudinary, or local)
+      if (!template.word_file_path && !template.cloudinary_url && !template.gridfs_file_id) {
+        console.log('❌ [generate-contract] La plantilla no tiene archivo Word (GridFS, cloud ni local)');
         return res.status(404).json({ error: 'Esta plantilla no tiene un archivo Word asociado. Por favor, suba un archivo Word a la plantilla.' });
       }
 
       console.log('🚀 GENERANDO CONTRATO DESDE PLANTILLA:', template.name);
       console.log('📝 Datos recibidos:', Object.keys(contractData).length, 'campos');
       console.log('📁 word_file_path:', template.word_file_path);
+      console.log('📦 gridfs_file_id:', template.gridfs_file_id);
       console.log('☁️  cloudinary_url:', template.cloudinary_url);
 
-      // Get template file buffer (from local or cloud)
+      // Get template file buffer (priority: GridFS > Cloudinary > Local)
       let templateBuffer;
       try {
-        templateBuffer = await cloudStorage.getTemplateFileBuffer(template);
+        // Try GridFS first (preferred - MongoDB native)
+        if (template.gridfs_file_id) {
+          console.log('📦 Obteniendo archivo desde GridFS...');
+          templateBuffer = await gridfsStorage.downloadToBuffer(template.gridfs_file_id);
+        }
+        // Then try Cloudinary (legacy)
+        else if (template.cloudinary_url) {
+          console.log('☁️  Obteniendo archivo desde Cloudinary...');
+          templateBuffer = await cloudStorage.getTemplateFileBuffer(template);
+        }
+        // Finally try local file
+        else if (template.word_file_path && fs.existsSync(template.word_file_path)) {
+          console.log('📁 Obteniendo archivo local...');
+          templateBuffer = fs.readFileSync(template.word_file_path);
+        } else {
+          throw new Error('No hay archivo disponible en ningún almacenamiento');
+        }
         console.log('✅ Template buffer obtenido, tamaño:', templateBuffer.length, 'bytes');
       } catch (bufferError) {
         console.error('❌ Error obteniendo archivo de plantilla:', bufferError.message);
@@ -707,7 +768,7 @@ router.post('/',
         return res.status(400).json({ errors: errors.array() });
       }
 
-      const { name, description, category, content, fields, wordFilePath, wordFileOriginalName, is_shared, shared_with_companies, third_party_type, cloudinaryUrl, cloudinaryPublicId } = req.body;
+      const { name, description, category, content, fields, wordFilePath, wordFileOriginalName, is_shared, shared_with_companies, third_party_type, gridfsFileId, gridfsFileName, cloudinaryUrl, cloudinaryPublicId } = req.body;
 
       console.log('🔵 Template data:', {
         name,
@@ -749,7 +810,10 @@ router.post('/',
         created_by: req.user.id,
         word_file_path: wordFilePath || null,
         word_file_original_name: wordFileOriginalName || null,
-        // Cloud storage fields
+        // GridFS storage fields (preferred - MongoDB native)
+        gridfs_file_id: gridfsFileId || null,
+        gridfs_file_name: gridfsFileName || null,
+        // Legacy Cloudinary fields
         cloudinary_url: cloudinaryUrl || null,
         cloudinary_public_id: cloudinaryPublicId || null,
         version: 1,

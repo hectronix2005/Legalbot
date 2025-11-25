@@ -147,16 +147,27 @@ const contractTemplateSchema = new mongoose.Schema({
   },
   word_file_path: String,
   word_file_original_name: String,
-  // Cloud storage fields (Cloudinary)
+  // Cloud storage fields (Cloudinary) - legacy, prefer GridFS
   cloudinary_url: {
     type: String,
     default: null,
-    description: 'URL del archivo en Cloudinary para almacenamiento persistente'
+    description: 'URL del archivo en Cloudinary (legacy - usar GridFS preferiblemente)'
   },
   cloudinary_public_id: {
     type: String,
     default: null,
-    description: 'Public ID en Cloudinary para eliminar/actualizar el archivo'
+    description: 'Public ID en Cloudinary (legacy - usar GridFS preferiblemente)'
+  },
+  // GridFS storage fields (MongoDB native - preferred)
+  gridfs_file_id: {
+    type: String,
+    default: null,
+    description: 'ID del archivo en MongoDB GridFS para almacenamiento persistente'
+  },
+  gridfs_file_name: {
+    type: String,
+    default: null,
+    description: 'Nombre del archivo almacenado en GridFS'
   },
   active: {
     type: Boolean,
