@@ -1117,8 +1117,14 @@ const UnifiedTemplates: React.FC = () => {
 
     setIsGenerating(true);
     try {
+      // Obtener datos del supplier seleccionado para guardarlo con el contrato
+      const supplierData = suppliers.find(s => s._id === selectedSupplier);
+
       const response = await api.post(`/templates/${selectedTemplateForGenerate._id}/generate-contract`, {
-        contractData: contractData
+        contractData: contractData,
+        supplierId: selectedSupplier,
+        supplierName: supplierData?.legal_name || supplierData?.full_name || '',
+        supplierIdentification: supplierData?.identification_number || ''
       });
 
       alert(`¡Contrato generado exitosamente!\n\nNúmero: ${response.data.contract.contract_number}`);

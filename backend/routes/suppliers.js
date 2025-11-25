@@ -967,11 +967,13 @@ router.get('/contracts/consolidated',
       // Para cada tercero, buscar contratos asociados
       const consolidatedData = await Promise.all(
         suppliers.map(async (supplier) => {
-          // Construir filtro de contratos
+          // Construir filtro de contratos - PRIMERO buscar por supplier ID directo (nuevo método)
+          // También buscar por regex en contenido (contratos antiguos sin supplier ID)
           const contractFilter = {
             $or: [
-              { content: { $regex: supplier.legal_name, $options: 'i' } },
-              { content: { $regex: supplier.identification_number, $options: 'i' } }
+              { supplier: supplier._id },  // Nuevo: búsqueda directa por ID
+              { supplier_identification: supplier.identification_number },  // Por número de identificación
+              { content: { $regex: supplier.identification_number, $options: 'i' } }  // Fallback legacy
             ]
           };
 
@@ -984,7 +986,8 @@ router.get('/contracts/consolidated',
           const contracts = await Contract.find(contractFilter)
             .populate('template', 'name category')
             .populate('generated_by', 'name email')
-            .select('contract_number title status createdAt template generated_by company company_name')
+            .populate('supplier', 'legal_name identification_number')
+            .select('contract_number title status createdAt template generated_by company company_name supplier supplier_name supplier_identification')
             .sort({ createdAt: -1 })
             .lean();
 
@@ -1097,11 +1100,12 @@ router.get('/:id/contracts',
         return res.status(404).json({ error: 'Tercero no encontrado' });
       }
 
-      // Buscar contratos
+      // Buscar contratos - PRIMERO por supplier ID directo, luego por identificación
       const contractFilter = {
         $or: [
-          { content: { $regex: supplier.legal_name, $options: 'i' } },
-          { content: { $regex: supplier.identification_number, $options: 'i' } }
+          { supplier: supplier._id },  // Nuevo: búsqueda directa por ID
+          { supplier_identification: supplier.identification_number },  // Por número de identificación
+          { content: { $regex: supplier.identification_number, $options: 'i' } }  // Fallback legacy
         ]
       };
 
@@ -1112,7 +1116,8 @@ router.get('/:id/contracts',
       const contracts = await Contract.find(contractFilter)
         .populate('template', 'name category third_party_type')
         .populate('generated_by', 'name email')
-        .select('contract_number title content description status createdAt template generated_by company company_name file_path')
+        .populate('supplier', 'legal_name identification_number')
+        .select('contract_number title content description status createdAt template generated_by company company_name file_path supplier supplier_name supplier_identification')
         .sort({ createdAt: -1 })
         .lean();
 

@@ -406,11 +406,13 @@ router.post('/:id/generate-contract',
   authorize('super_admin', 'admin', 'lawyer'),
   async (req, res) => {
     try {
-      const { contractData } = req.body;
+      const { contractData, supplierId, supplierName, supplierIdentification } = req.body;
 
       if (!contractData || typeof contractData !== 'object') {
         return res.status(400).json({ error: 'Se requieren los datos del contrato' });
       }
+
+      console.log('📋 [generate-contract] Supplier info recibido:', { supplierId, supplierName, supplierIdentification });
 
       // Buscar plantilla
       const filter = { _id: req.params.id };
@@ -576,6 +578,18 @@ router.post('/:id/generate-contract',
         generated_by: req.user.id,
         status: 'active'
       };
+
+      // Agregar información del tercero/supplier si está disponible
+      if (supplierId) {
+        newContractRecord.supplier = supplierId;
+        console.log('👤 Asignando supplier ID:', supplierId);
+      }
+      if (supplierName) {
+        newContractRecord.supplier_name = supplierName;
+      }
+      if (supplierIdentification) {
+        newContractRecord.supplier_identification = supplierIdentification;
+      }
 
       // Solo agregar company si es un ObjectId válido (no 'ALL')
       if (req.companyId && req.companyId !== 'ALL') {

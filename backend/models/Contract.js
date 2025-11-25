@@ -49,6 +49,21 @@ const contractSchema = new mongoose.Schema({
   company_name: {
     type: String,
     required: false
+  },
+  // Tercero/Supplier asociado al contrato
+  supplier: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Supplier',
+    required: false,
+    index: true
+  },
+  supplier_name: {
+    type: String,
+    required: false
+  },
+  supplier_identification: {
+    type: String,
+    required: false
   }
 }, {
   timestamps: true
