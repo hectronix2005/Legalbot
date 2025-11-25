@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
 import { useAuth } from '../context/AuthContext';
 import api from '../services/api';
 
@@ -39,77 +39,72 @@ export const CompanyProvider: React.FC<CompanyProviderProps> = ({ children }) =>
   const [isLoading, setIsLoading] = useState(true);
 
   // Cargar empresas del usuario desde el endpoint /my-companies
-  useEffect(() => {
-    const loadUserCompanies = async () => {
-      if (!user) {
+  const loadUserCompanies = useCallback(async () => {
+    if (!user) {
+      setIsLoading(false);
+      return;
+    }
+
+    try {
+      const response = await api.get('/companies/my-companies');
+      console.log('Respuesta de /my-companies:', response.data);
+
+      // Asegurar que companies es un array válido
+      const companiesData = response.data;
+      let companies: CompanyRole[] = [];
+
+      if (Array.isArray(companiesData)) {
+        companies = companiesData;
+      } else if (companiesData && typeof companiesData === 'object') {
+        // Si es un objeto, intentar convertirlo a array
+        console.warn('Respuesta no es array, intentando convertir:', companiesData);
+        companies = [];
+      } else {
+        console.warn('Respuesta inesperada de /my-companies:', companiesData);
+        companies = [];
+      }
+
+      setUserCompanies(companies);
+
+      if (companies.length === 0) {
+        console.warn('No hay empresas disponibles para el usuario. El usuario debe tener al menos una empresa asignada.');
         setIsLoading(false);
         return;
       }
 
-      try {
-        const response = await api.get('/companies/my-companies');
-        console.log('Respuesta de /my-companies:', response.data);
+      // Leer empresa de localStorage (NO de URL para evitar conflictos con React Router)
+      const companyFromStorage = localStorage.getItem('selectedCompanyId');
 
-        // Asegurar que companies es un array válido
-        const companiesData = response.data;
-        let companies: CompanyRole[] = [];
+      // Prioridad: localStorage > Primera empresa
+      let companyToSelect = companyFromStorage || companies[0]?.companyId;
 
-        if (Array.isArray(companiesData)) {
-          companies = companiesData;
-        } else if (companiesData && typeof companiesData === 'object') {
-          // Si es un objeto, intentar convertirlo a array
-          console.warn('Respuesta no es array, intentando convertir:', companiesData);
-          companies = [];
-        } else {
-          console.warn('Respuesta inesperada de /my-companies:', companiesData);
-          companies = [];
-        }
+      // Verificar que el usuario tiene acceso a esa empresa
+      // Permitir "ALL" para super_admin sin validación adicional
+      const isSuperAdmin = companies.some(c => c.roles.includes('super_admin'));
+      const hasAccess = companyToSelect === 'ALL'
+        ? isSuperAdmin
+        : companies.some(c => c.companyId === companyToSelect);
 
-        setUserCompanies(companies);
-
-        if (companies.length === 0) {
-          console.warn('No hay empresas disponibles para el usuario. El usuario debe tener al menos una empresa asignada.');
-          setIsLoading(false);
-          return;
-        }
-
-        // Leer empresa de URL o localStorage
-        const urlParams = new URLSearchParams(window.location.search);
-        const companyFromUrl = urlParams.get('company');
-        const companyFromStorage = localStorage.getItem('selectedCompanyId');
-
-        // Prioridad: URL > localStorage > Primera empresa
-        let companyToSelect = companyFromUrl || companyFromStorage || companies[0]?.companyId;
-
-        // Verificar que el usuario tiene acceso a esa empresa
-        // Permitir "ALL" para super_admin sin validación adicional
-        const isSuperAdmin = companies.some(c => c.roles.includes('super_admin'));
-        const hasAccess = companyToSelect === 'ALL'
-          ? isSuperAdmin
-          : companies.some(c => c.companyId === companyToSelect);
-
-        if (!hasAccess && companies.length > 0) {
-          companyToSelect = companies[0].companyId;
-        }
-
-        if (companyToSelect) {
-          setSelectedCompanyId(companyToSelect);
-          localStorage.setItem('selectedCompanyId', companyToSelect);
-          console.log(`✅ CompanyContext: Empresa seleccionada: ${companyToSelect === 'ALL' ? 'TODAS LAS EMPRESAS' : companyToSelect}`);
-
-          // NO modificar la URL aqui - dejamos que la navegacion de React Router maneje las rutas
-          // Solo guardamos en localStorage para persistencia
-        }
-
-        setIsLoading(false);
-      } catch (error) {
-        console.error('Error al cargar empresas:', error);
-        setIsLoading(false);
+      if (!hasAccess && companies.length > 0) {
+        companyToSelect = companies[0].companyId;
       }
-    };
 
-    loadUserCompanies();
+      if (companyToSelect) {
+        setSelectedCompanyId(companyToSelect);
+        localStorage.setItem('selectedCompanyId', companyToSelect);
+        console.log(`✅ CompanyContext: Empresa seleccionada: ${companyToSelect === 'ALL' ? 'TODAS LAS EMPRESAS' : companyToSelect}`);
+      }
+
+      setIsLoading(false);
+    } catch (error) {
+      console.error('Error al cargar empresas:', error);
+      setIsLoading(false);
+    }
   }, [user]);
+
+  useEffect(() => {
+    loadUserCompanies();
+  }, [loadUserCompanies]);
 
   const selectCompany = (companyId: string) => {
     // Permitir "ALL" para super_admin

@@ -61,11 +61,11 @@ const AppContent: React.FC = () => {
 const App: React.FC = () => {
   return (
     <AuthProvider>
-      <CompanyProvider>
-        <Router>
+      <Router>
+        <CompanyProvider>
           <AppContent />
-        </Router>
-      </CompanyProvider>
+        </CompanyProvider>
+      </Router>
     </AuthProvider>
   );
 };
