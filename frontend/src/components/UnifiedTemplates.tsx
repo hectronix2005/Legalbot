@@ -56,7 +56,12 @@ interface Supplier {
   country?: string;
   active?: boolean;
   custom_fields?: Record<string, any>;
-  third_party_type_id?: string;
+  third_party_type?: {
+    _id: string;
+    code: string;
+    label: string;
+    icon?: string;
+  } | string;
 }
 
 const UnifiedTemplates: React.FC = () => {
@@ -479,7 +484,11 @@ const UnifiedTemplates: React.FC = () => {
 
       // Si hay un tipo de tercero seleccionado, filtrar por ese tipo
       if (filterThirdPartyType) {
-        return s.third_party_type_id === filterThirdPartyType;
+        // El campo third_party_type puede ser un objeto (populado) o un string (ID)
+        const supplierTypeId = typeof s.third_party_type === 'object' && s.third_party_type
+          ? s.third_party_type._id
+          : s.third_party_type;
+        return supplierTypeId === filterThirdPartyType;
       }
 
       // Si no hay filtro, no mostrar ninguno (debe seleccionar tipo primero)
