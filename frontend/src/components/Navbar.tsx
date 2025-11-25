@@ -25,7 +25,7 @@ const Navbar: React.FC = () => {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  const adminPaths = ['/companies', '/user-management', '/company-users', '/third-parties', '/contract-categories', '/supplier-contracts', '/admin'];
+  const adminPaths = ['/companies', '/user-management', '/company-users', '/third-parties', '/contract-categories', '/supplier-contracts', '/requests-approvals', '/admin'];
   const isAdminActive = adminPaths.some(path => location.pathname === path);
 
   return (
@@ -54,41 +54,12 @@ const Navbar: React.FC = () => {
           </Link>
         </RoleGuard>
 
-        <RoleGuard allowedRoles={['requester']}>
-          <Link
-            to="/contract-request"
-            className={isActive('/contract-request') ? 'active' : ''}
-          >
-            Solicitar Contrato
-          </Link>
-        </RoleGuard>
-
-        <RoleGuard allowedRoles={['requester']}>
-          <Link
-            to="/my-requests"
-            className={isActive('/my-requests') ? 'active' : ''}
-          >
-            Mis Solicitudes
-          </Link>
-        </RoleGuard>
-
-        <RoleGuard allowedRoles={['lawyer', 'admin', 'super_admin']}>
-          <Link
-            to="/supplier-approvals"
-            className={isActive('/supplier-approvals') ? 'active' : ''}
-          >
-            Aprobar Terceros
-          </Link>
-        </RoleGuard>
-
-        <RoleGuard allowedRoles={['lawyer', 'admin', 'super_admin']}>
-          <Link
-            to="/contract-approvals"
-            className={isActive('/contract-approvals') ? 'active' : ''}
-          >
-            Aprobar Solicitudes
-          </Link>
-        </RoleGuard>
+        <Link
+          to="/requests-approvals"
+          className={isActive('/requests-approvals') ? 'active' : ''}
+        >
+          📋 Solicitudes
+        </Link>
 
         <RoleGuard allowedRoles={['super_admin', 'admin']}>
           <div className="navbar-dropdown" ref={dropdownRef}>
