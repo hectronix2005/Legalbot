@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import api from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import DynamicQuestionnaire from './DynamicQuestionnaire';
@@ -51,20 +52,44 @@ type TabType = 'new-request' | 'my-requests' | 'supplier-approvals' | 'contract-
 
 const RequestsAndApprovals: React.FC = () => {
   const { user } = useAuth();
-  const [activeTab, setActiveTab] = useState<TabType>('my-requests');
+  const location = useLocation();
+  const navigate = useNavigate();
 
-  // Determinar tabs disponibles según rol
+  // Determinar tabs disponibles segun rol
   const isRequester = user?.role === 'requester';
   const canApprove = ['super_admin', 'admin', 'lawyer'].includes(user?.role || '');
 
-  // Establecer tab inicial según rol
-  useEffect(() => {
-    if (isRequester) {
-      setActiveTab('my-requests');
-    } else if (canApprove) {
-      setActiveTab('contract-approvals');
+  // Leer el tab de la URL
+  const getTabFromURL = (): TabType => {
+    const params = new URLSearchParams(location.search);
+    const tab = params.get('tab');
+    if (tab === 'new-request' || tab === 'my-requests' || tab === 'supplier-approvals' || tab === 'contract-approvals') {
+      return tab;
     }
-  }, [isRequester, canApprove]);
+    // Si no hay tab en URL, usar default segun rol
+    if (isRequester) {
+      return 'my-requests';
+    } else if (canApprove) {
+      return 'contract-approvals';
+    }
+    return 'my-requests';
+  };
+
+  const [activeTab, setActiveTab] = useState<TabType>(getTabFromURL());
+
+  // Cambiar tabs y actualizar URL
+  const handleTabChange = (tab: TabType) => {
+    setActiveTab(tab);
+    navigate(`?tab=${tab}`, { replace: true });
+  };
+
+  // Sincronizar con cambios en URL (boton atras/adelante)
+  useEffect(() => {
+    const tabFromURL = getTabFromURL();
+    if (tabFromURL !== activeTab) {
+      setActiveTab(tabFromURL);
+    }
+  }, [location.search]);
 
   const renderTabContent = () => {
     switch (activeTab) {
@@ -94,7 +119,7 @@ const RequestsAndApprovals: React.FC = () => {
           {(isRequester || canApprove) && (
             <button
               className={`tab-btn ${activeTab === 'new-request' ? 'active' : ''}`}
-              onClick={() => setActiveTab('new-request')}
+              onClick={() => handleTabChange('new-request')}
             >
               <span className="tab-icon">📝</span>
               Nueva Solicitud
@@ -103,7 +128,7 @@ const RequestsAndApprovals: React.FC = () => {
 
           <button
             className={`tab-btn ${activeTab === 'my-requests' ? 'active' : ''}`}
-            onClick={() => setActiveTab('my-requests')}
+            onClick={() => handleTabChange('my-requests')}
           >
             <span className="tab-icon">📋</span>
             Mis Solicitudes
@@ -114,7 +139,7 @@ const RequestsAndApprovals: React.FC = () => {
             <>
               <button
                 className={`tab-btn ${activeTab === 'supplier-approvals' ? 'active' : ''}`}
-                onClick={() => setActiveTab('supplier-approvals')}
+                onClick={() => handleTabChange('supplier-approvals')}
               >
                 <span className="tab-icon">👥</span>
                 Aprobar Terceros
@@ -122,7 +147,7 @@ const RequestsAndApprovals: React.FC = () => {
 
               <button
                 className={`tab-btn ${activeTab === 'contract-approvals' ? 'active' : ''}`}
-                onClick={() => setActiveTab('contract-approvals')}
+                onClick={() => handleTabChange('contract-approvals')}
               >
                 <span className="tab-icon">✅</span>
                 Aprobar Solicitudes
