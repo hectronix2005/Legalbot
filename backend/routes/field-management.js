@@ -13,6 +13,43 @@ const Supplier = require('../models/Supplier');
 const ContractTemplate = require('../models/ContractTemplate');
 
 /**
+ * Helper: Detectar tipo de campo automáticamente basado en el nombre
+ */
+function detectFieldType(fieldName) {
+  const name = fieldName.toLowerCase();
+
+  // Patrones para detectar fechas
+  if (name.includes('fecha') || name.includes('date') ||
+      name.includes('nacimiento') || name.includes('inicio') ||
+      name.includes('fin') || name.includes('vencimiento') ||
+      name.includes('expedicion') || name.includes('ingreso')) {
+    return 'date';
+  }
+
+  // Patrones para detectar emails
+  if (name.includes('email') || name.includes('correo') || name.includes('mail')) {
+    return 'email';
+  }
+
+  // Patrones para detectar números
+  if (name.includes('telefono') || name.includes('celular') ||
+      name.includes('phone') || name.includes('salario') ||
+      name.includes('monto') || name.includes('valor') ||
+      name.includes('precio') || name.includes('cantidad')) {
+    return 'number';
+  }
+
+  // Patrones para detectar áreas de texto largo
+  if (name.includes('descripcion') || name.includes('observacion') ||
+      name.includes('comentario') || name.includes('nota') ||
+      name.includes('direccion') || name.includes('objeto')) {
+    return 'textarea';
+  }
+
+  return 'text';
+}
+
+/**
  * GET /api/field-management/supplier/:id/analysis
  * Análisis completo de campos del tercero
  */
@@ -771,6 +808,224 @@ router.post('/merge-fields-bulk', authenticate, verifyTenant, authorize('admin',
       details: error.message
     });
   }
+});
+
+/**
+ * GET /api/field-management/template/:templateId/fields
+ * Obtener campos de una plantilla para edición
+ */
+router.get('/template/:templateId/fields', authenticate, verifyTenant, async (req, res) => {
+  try {
+    const template = await ContractTemplate.findById(req.params.templateId)
+      .select('name fields third_party_type company is_shared')
+      .maxTimeMS(10000);
+
+    if (!template) {
+      return res.status(404).json({ error: 'Plantilla no encontrada' });
+    }
+
+    // Verificar acceso
+    if (!template.is_shared && template.company &&
+        req.companyId !== 'ALL' && template.company.toString() !== req.companyId) {
+      return res.status(403).json({ error: 'No tiene acceso a esta plantilla' });
+    }
+
+    // Agregar detección de tipo sugerido a cada campo
+    const fieldsWithSuggestions = (template.fields || []).map(field => ({
+      ...field.toObject(),
+      suggestedType: detectFieldType(field.field_name || field.name || '')
+    }));
+
+    res.json({
+      success: true,
+      template: {
+        _id: template._id,
+        name: template.name,
+        third_party_type: template.third_party_type
+      },
+      fields: fieldsWithSuggestions,
+      availableTypes: [
+        { value: 'text', label: 'Texto' },
+        { value: 'number', label: 'Número' },
+        { value: 'date', label: 'Fecha' },
+        { value: 'email', label: 'Email' },
+        { value: 'textarea', label: 'Texto largo' },
+        { value: 'select', label: 'Selección' }
+      ]
+    });
+  } catch (error) {
+    console.error('❌ Error getting template fields:', error);
+    res.status(500).json({ error: 'Error al obtener campos de plantilla' });
+  }
+});
+
+/**
+ * PUT /api/field-management/template/:templateId/field/:fieldIndex
+ * Actualizar propiedades de un campo específico de plantilla
+ * Solo super_admin y admin pueden usar este endpoint
+ */
+router.put('/template/:templateId/field/:fieldIndex', authenticate, verifyTenant, authorize('super_admin', 'admin'), async (req, res) => {
+  try {
+    const { templateId, fieldIndex } = req.params;
+    const { field_type, field_label, required, description, field_options } = req.body;
+
+    console.log('📝 [FIELD-EDIT] Updating field:', {
+      templateId,
+      fieldIndex,
+      updates: { field_type, field_label, required, description }
+    });
+
+    const template = await ContractTemplate.findById(templateId).maxTimeMS(10000);
+
+    if (!template) {
+      return res.status(404).json({ error: 'Plantilla no encontrada' });
+    }
+
+    // Verificar permisos
+    if (template.is_shared && req.user.role !== 'super_admin') {
+      return res.status(403).json({ error: 'Solo super admin puede editar plantillas compartidas' });
+    }
+
+    if (!template.is_shared && template.company &&
+        req.companyId !== 'ALL' && template.company.toString() !== req.companyId) {
+      return res.status(403).json({ error: 'No tiene acceso a esta plantilla' });
+    }
+
+    // Validar índice
+    const idx = parseInt(fieldIndex);
+    if (isNaN(idx) || idx < 0 || idx >= template.fields.length) {
+      return res.status(400).json({ error: 'Índice de campo inválido' });
+    }
+
+    // Actualizar campo
+    const field = template.fields[idx];
+    if (field_type !== undefined) field.field_type = field_type;
+    if (field_label !== undefined) field.field_label = field_label;
+    if (required !== undefined) field.required = required;
+    if (description !== undefined) field.description = description;
+    if (field_options !== undefined) field.field_options = field_options;
+
+    // Guardar con findByIdAndUpdate para evitar problemas
+    await ContractTemplate.findByIdAndUpdate(
+      templateId,
+      { $set: { fields: template.fields } },
+      { runValidators: true, maxTimeMS: 15000 }
+    );
+
+    console.log('✅ [FIELD-EDIT] Field updated successfully');
+
+    res.json({
+      success: true,
+      message: 'Campo actualizado exitosamente',
+      field: template.fields[idx]
+    });
+  } catch (error) {
+    console.error('❌ [FIELD-EDIT] Error updating field:', error);
+    res.status(500).json({
+      error: 'Error al actualizar campo',
+      details: error.message
+    });
+  }
+});
+
+/**
+ * PUT /api/field-management/template/:templateId/fields/bulk
+ * Actualizar múltiples campos a la vez (para aplicar auto-detección)
+ * Solo super_admin y admin pueden usar este endpoint
+ */
+router.put('/template/:templateId/fields/bulk', authenticate, verifyTenant, authorize('super_admin', 'admin'), async (req, res) => {
+  try {
+    const { templateId } = req.params;
+    const { fields, autoDetect } = req.body;
+
+    console.log('📝 [FIELD-BULK-EDIT] Bulk updating fields:', {
+      templateId,
+      fieldsCount: fields?.length,
+      autoDetect
+    });
+
+    const template = await ContractTemplate.findById(templateId).maxTimeMS(10000);
+
+    if (!template) {
+      return res.status(404).json({ error: 'Plantilla no encontrada' });
+    }
+
+    // Verificar permisos
+    if (template.is_shared && req.user.role !== 'super_admin') {
+      return res.status(403).json({ error: 'Solo super admin puede editar plantillas compartidas' });
+    }
+
+    if (!template.is_shared && template.company &&
+        req.companyId !== 'ALL' && template.company.toString() !== req.companyId) {
+      return res.status(403).json({ error: 'No tiene acceso a esta plantilla' });
+    }
+
+    let updatedFields = template.fields;
+    let changesCount = 0;
+
+    if (autoDetect) {
+      // Auto-detectar tipos basado en nombres
+      updatedFields = template.fields.map(field => {
+        const detectedType = detectFieldType(field.field_name || '');
+        if (field.field_type !== detectedType) {
+          changesCount++;
+          return { ...field.toObject(), field_type: detectedType };
+        }
+        return field;
+      });
+    } else if (fields && Array.isArray(fields)) {
+      // Actualizar campos específicos
+      fields.forEach(update => {
+        const idx = updatedFields.findIndex(f =>
+          f.field_name === update.field_name || f._id?.toString() === update._id
+        );
+        if (idx !== -1) {
+          if (update.field_type !== undefined) updatedFields[idx].field_type = update.field_type;
+          if (update.field_label !== undefined) updatedFields[idx].field_label = update.field_label;
+          if (update.required !== undefined) updatedFields[idx].required = update.required;
+          if (update.description !== undefined) updatedFields[idx].description = update.description;
+          changesCount++;
+        }
+      });
+    }
+
+    // Guardar
+    await ContractTemplate.findByIdAndUpdate(
+      templateId,
+      { $set: { fields: updatedFields } },
+      { runValidators: true, maxTimeMS: 15000 }
+    );
+
+    console.log('✅ [FIELD-BULK-EDIT] Fields updated:', changesCount);
+
+    res.json({
+      success: true,
+      message: `${changesCount} campo(s) actualizado(s)`,
+      fields: updatedFields.map(f => ({
+        ...f.toObject ? f.toObject() : f,
+        suggestedType: detectFieldType(f.field_name || '')
+      }))
+    });
+  } catch (error) {
+    console.error('❌ [FIELD-BULK-EDIT] Error:', error);
+    res.status(500).json({
+      error: 'Error al actualizar campos',
+      details: error.message
+    });
+  }
+});
+
+/**
+ * GET /api/field-management/detect-type/:fieldName
+ * Detectar tipo de campo basado en el nombre
+ */
+router.get('/detect-type/:fieldName', authenticate, (req, res) => {
+  const detectedType = detectFieldType(req.params.fieldName);
+  res.json({
+    fieldName: req.params.fieldName,
+    detectedType,
+    confidence: detectedType === 'text' ? 'low' : 'high'
+  });
 });
 
 module.exports = router;
