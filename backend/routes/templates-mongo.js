@@ -319,6 +319,9 @@ router.post('/:id/generate-contract',
       // Buscar plantilla
       const filter = { _id: req.params.id };
 
+      console.log('🔍 [generate-contract] Buscando plantilla con ID:', req.params.id);
+      console.log('🔍 [generate-contract] User role:', req.user.role, 'CompanyId:', req.companyId);
+
       // Si es super_admin, puede acceder a cualquier plantilla
       // Si no, filtrar por company o plantillas compartidas
       if (req.user.role !== 'super_admin') {
@@ -332,9 +335,28 @@ router.post('/:id/generate-contract',
         }
       }
 
+      console.log('🔍 [generate-contract] Filter:', JSON.stringify(filter));
+
       const template = await ContractTemplate.findOne(filter);
 
+      console.log('🔍 [generate-contract] Template found:', template ? 'YES' : 'NO');
+      if (template) {
+        console.log('🔍 [generate-contract] Template name:', template.name);
+        console.log('🔍 [generate-contract] Template active:', template.active);
+        console.log('🔍 [generate-contract] Template has word_file_path:', !!template.word_file_path);
+      }
+
       if (!template) {
+        // Intentar buscar sin filtro para debug
+        const anyTemplate = await ContractTemplate.findById(req.params.id);
+        if (anyTemplate) {
+          console.log('⚠️ [generate-contract] Plantilla existe pero no pasa filtros:');
+          console.log('  - active:', anyTemplate.active);
+          console.log('  - company:', anyTemplate.company);
+          console.log('  - is_shared:', anyTemplate.is_shared);
+        } else {
+          console.log('❌ [generate-contract] Plantilla NO existe en la base de datos');
+        }
         return res.status(404).json({ error: 'Plantilla no encontrada' });
       }
 
