@@ -20,6 +20,7 @@
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",
+    "cloudinary": "^2.8.0",
     "cors": "^2.8.5",
     "docx": "^9.5.1",
     "docxtemplater": "^3.66.6",

@@ -11,6 +11,7 @@ const VersionHistory = require('../models/VersionHistory');
 const ActivityLog = require('../models/ActivityLog');
 const { getAllThirdPartyTypes, getThirdPartyConfig } = require('../config/thirdPartyTypes');
 const ThirdPartyTypeConfig = require('../models/ThirdPartyTypeConfig');
+const cloudStorage = require('../services/cloudStorageService');
 
 // Configurar multer
 const storage = multer.diskStorage({
@@ -142,6 +143,15 @@ router.post('/upload-word',
       const fileBuffer = fs.readFileSync(req.file.path);
       const result = await extractYellowHighlightedFields(fileBuffer);
 
+      // Upload to Cloudinary for persistent storage
+      let cloudinaryData = null;
+      try {
+        cloudinaryData = await cloudStorage.uploadFile(req.file.path, req.file.originalname);
+        console.log('☁️  Archivo subido a Cloudinary:', cloudinaryData?.url);
+      } catch (cloudError) {
+        console.warn('⚠️  No se pudo subir a Cloudinary (continuando con almacenamiento local):', cloudError.message);
+      }
+
       res.json({
         success: true,
         filePath: req.file.path,
@@ -149,7 +159,10 @@ router.post('/upload-word',
         originalName: req.file.originalname,
         content: result.content,
         fields: result.fields,
-        messages: result.messages
+        messages: result.messages,
+        // Cloud storage info
+        cloudinaryUrl: cloudinaryData?.url || null,
+        cloudinaryPublicId: cloudinaryData?.publicId || null
       });
     } catch (error) {
       console.error('Error al procesar archivo Word:', error);
@@ -201,19 +214,30 @@ router.get('/:id/download-word', authenticate, verifyTenant, async (req, res) =>
       return res.status(404).json({ error: 'Plantilla no encontrada' });
     }
 
-    if (!template.word_file_path) {
+    // Check if template has a file (local or cloud)
+    if (!template.word_file_path && !template.cloudinary_url) {
       return res.status(404).json({ error: 'Esta plantilla no tiene un archivo Word asociado' });
     }
 
-    // Verificar que el archivo existe
-    if (!fs.existsSync(template.word_file_path)) {
-      return res.status(404).json({ error: 'El archivo Word no se encuentra en el servidor' });
+    console.log('📥 Descargando archivo Word de plantilla:', template.name);
+
+    // If cloudinary URL exists, redirect to it
+    if (template.cloudinary_url) {
+      console.log('☁️  Redirigiendo a Cloudinary:', template.cloudinary_url);
+      return res.redirect(template.cloudinary_url);
     }
 
-    console.log('📥 Descargando archivo Word de plantilla:', template.name);
-    console.log('📁 Ruta:', template.word_file_path);
+    // Check if local file exists
+    if (!fs.existsSync(template.word_file_path)) {
+      return res.status(404).json({
+        error: 'El archivo Word no se encuentra en el servidor. Puede que se haya perdido tras un reinicio.',
+        suggestion: 'Por favor, vuelva a subir el archivo usando "Reemplazar Word"'
+      });
+    }
 
-    // Enviar el archivo
+    console.log('📁 Ruta local:', template.word_file_path);
+
+    // Enviar el archivo local
     res.download(template.word_file_path, template.word_file_original_name || `${template.name}.docx`, (err) => {
       if (err) {
         console.error('Error al descargar archivo:', err);
@@ -240,11 +264,16 @@ router.post('/:id/replace-word',
         return res.status(400).json({ error: 'No se proporcionó archivo Word' });
       }
 
-      // Buscar plantilla
-      const template = await ContractTemplate.findOne({
-        _id: req.params.id,
-        company: req.companyId // Solo puede reemplazar plantillas de su empresa
-      });
+      // Buscar plantilla - permitir super_admin acceder a todas
+      let templateQuery = { _id: req.params.id };
+      if (req.user.role !== 'super_admin') {
+        templateQuery.$or = [
+          { company: req.companyId },
+          { is_shared: true }
+        ];
+      }
+
+      const template = await ContractTemplate.findOne(templateQuery);
 
       if (!template) {
         // Limpiar archivo subido
@@ -253,22 +282,44 @@ router.post('/:id/replace-word',
       }
 
       console.log('🔄 Reemplazando archivo Word de plantilla:', template.name);
-      console.log('📁 Archivo anterior:', template.word_file_path);
+      console.log('📁 Archivo anterior (local):', template.word_file_path);
+      console.log('☁️  Archivo anterior (cloud):', template.cloudinary_url);
       console.log('📁 Archivo nuevo:', req.file.path);
 
-      // Eliminar archivo anterior si existe
+      // Delete old file from Cloudinary if exists
+      if (template.cloudinary_public_id) {
+        try {
+          await cloudStorage.deleteFile(template.cloudinary_public_id);
+          console.log('☁️  Archivo anterior eliminado de Cloudinary');
+        } catch (cloudError) {
+          console.warn('⚠️  No se pudo eliminar archivo anterior de Cloudinary:', cloudError.message);
+        }
+      }
+
+      // Eliminar archivo local anterior si existe
       if (template.word_file_path && fs.existsSync(template.word_file_path)) {
         try {
           fs.unlinkSync(template.word_file_path);
-          console.log('✅ Archivo anterior eliminado');
+          console.log('✅ Archivo local anterior eliminado');
         } catch (error) {
-          console.log('⚠️  No se pudo eliminar el archivo anterior:', error);
+          console.log('⚠️  No se pudo eliminar el archivo local anterior:', error);
         }
+      }
+
+      // Upload new file to Cloudinary
+      let cloudinaryData = null;
+      try {
+        cloudinaryData = await cloudStorage.uploadFile(req.file.path, req.file.originalname);
+        console.log('☁️  Nuevo archivo subido a Cloudinary:', cloudinaryData?.url);
+      } catch (cloudError) {
+        console.warn('⚠️  No se pudo subir a Cloudinary (continuando con almacenamiento local):', cloudError.message);
       }
 
       // Actualizar plantilla con nuevo archivo
       template.word_file_path = req.file.path;
       template.word_file_original_name = req.file.originalname;
+      template.cloudinary_url = cloudinaryData?.url || null;
+      template.cloudinary_public_id = cloudinaryData?.publicId || null;
       await template.save();
 
       console.log('✅ Archivo Word reemplazado exitosamente');
@@ -284,7 +335,8 @@ router.post('/:id/replace-word',
 
       res.json({
         message: 'Archivo Word reemplazado exitosamente',
-        template: template
+        template: template,
+        cloudStorage: cloudinaryData ? 'uploaded' : 'local_only'
       });
     } catch (error) {
       console.error('Error al reemplazar archivo Word:', error);
@@ -360,28 +412,33 @@ router.post('/:id/generate-contract',
         return res.status(404).json({ error: 'Plantilla no encontrada' });
       }
 
-      if (!template.word_file_path) {
-        console.log('❌ [generate-contract] La plantilla no tiene word_file_path definido');
+      // Check if template file is available (local or cloud)
+      if (!template.word_file_path && !template.cloudinary_url) {
+        console.log('❌ [generate-contract] La plantilla no tiene archivo Word (local ni cloud)');
         return res.status(404).json({ error: 'Esta plantilla no tiene un archivo Word asociado. Por favor, suba un archivo Word a la plantilla.' });
-      }
-
-      if (!fs.existsSync(template.word_file_path)) {
-        console.log('❌ [generate-contract] El archivo Word no existe en el filesystem:', template.word_file_path);
-        console.log('⚠️  Esto puede ocurrir después de un reinicio del servidor (Heroku ephemeral filesystem)');
-        return res.status(404).json({
-          error: 'El archivo Word de la plantilla no se encuentra en el servidor. Esto puede ocurrir después de un reinicio. Por favor, vuelva a subir el archivo Word a la plantilla usando la opción "Reemplazar Word".',
-          details: 'Heroku ephemeral filesystem - los archivos se pierden al reiniciar'
-        });
       }
 
       console.log('🚀 GENERANDO CONTRATO DESDE PLANTILLA:', template.name);
       console.log('📝 Datos recibidos:', Object.keys(contractData).length, 'campos');
+      console.log('📁 word_file_path:', template.word_file_path);
+      console.log('☁️  cloudinary_url:', template.cloudinary_url);
+
+      // Get template file buffer (from local or cloud)
+      let templateBuffer;
+      try {
+        templateBuffer = await cloudStorage.getTemplateFileBuffer(template);
+        console.log('✅ Template buffer obtenido, tamaño:', templateBuffer.length, 'bytes');
+      } catch (bufferError) {
+        console.error('❌ Error obteniendo archivo de plantilla:', bufferError.message);
+        return res.status(404).json({
+          error: 'No se pudo obtener el archivo Word de la plantilla. Por favor, vuelva a subir el archivo usando "Reemplazar Word".',
+          details: bufferError.message
+        });
+      }
 
       // Preparar datos para Docxtemplater
       const PizZip = require('pizzip');
       const Docxtemplater = require('docxtemplater');
-
-      const templateBuffer = fs.readFileSync(template.word_file_path);
       const zip = new PizZip(templateBuffer);
 
       const doc = new Docxtemplater(zip, {
@@ -650,7 +707,7 @@ router.post('/',
         return res.status(400).json({ errors: errors.array() });
       }
 
-      const { name, description, category, content, fields, wordFilePath, wordFileOriginalName, is_shared, shared_with_companies, third_party_type } = req.body;
+      const { name, description, category, content, fields, wordFilePath, wordFileOriginalName, is_shared, shared_with_companies, third_party_type, cloudinaryUrl, cloudinaryPublicId } = req.body;
 
       console.log('🔵 Template data:', {
         name,
@@ -692,6 +749,9 @@ router.post('/',
         created_by: req.user.id,
         word_file_path: wordFilePath || null,
         word_file_original_name: wordFileOriginalName || null,
+        // Cloud storage fields
+        cloudinary_url: cloudinaryUrl || null,
+        cloudinary_public_id: cloudinaryPublicId || null,
         version: 1,
         is_shared: is_shared || false
       };

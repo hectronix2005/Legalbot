@@ -224,7 +224,7 @@ const UnifiedWordTemplateUpload: React.FC<UnifiedWordTemplateUploadProps> = ({
         }
       });
 
-      const { filePath, content } = uploadResponse.data;
+      const { filePath, content, cloudinaryUrl, cloudinaryPublicId } = uploadResponse.data;
 
       // Paso 2: Crear plantilla con los datos
       const templateData: any = {
@@ -234,7 +234,10 @@ const UnifiedWordTemplateUpload: React.FC<UnifiedWordTemplateUploadProps> = ({
         content: content || '',
         fields: detectedVariables,
         wordFilePath: filePath,
-        wordFileOriginalName: file.name
+        wordFileOriginalName: file.name,
+        // Cloud storage data for persistent storage
+        cloudinaryUrl: cloudinaryUrl || null,
+        cloudinaryPublicId: cloudinaryPublicId || null
       };
 
       // Configurar compartición de plantillas según rol

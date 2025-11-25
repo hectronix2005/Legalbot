@@ -147,6 +147,17 @@ const contractTemplateSchema = new mongoose.Schema({
   },
   word_file_path: String,
   word_file_original_name: String,
+  // Cloud storage fields (Cloudinary)
+  cloudinary_url: {
+    type: String,
+    default: null,
+    description: 'URL del archivo en Cloudinary para almacenamiento persistente'
+  },
+  cloudinary_public_id: {
+    type: String,
+    default: null,
+    description: 'Public ID en Cloudinary para eliminar/actualizar el archivo'
+  },
   active: {
     type: Boolean,
     default: true
