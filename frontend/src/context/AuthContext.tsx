@@ -49,54 +49,51 @@ interface AuthProviderProps {
   children: ReactNode;
 }
 
+// Funcion para obtener usuario inicial de localStorage (ejecuta SINCRONO antes del primer render)
+const getInitialUser = (): User | null => {
+  try {
+    const token = localStorage.getItem('token');
+    const userData = localStorage.getItem('user');
+    if (token && userData) {
+      return JSON.parse(userData);
+    }
+  } catch (error) {
+    console.error('Error parsing initial user data:', error);
+  }
+  return null;
+};
+
 export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
-  const [user, setUser] = useState<User | null>(null);
-  const [loading, setLoading] = useState(true);
+  // Inicializar usuario SINCRONAMENTE desde localStorage para evitar flash de redirect
+  const [user, setUser] = useState<User | null>(getInitialUser);
+  const loading = false; // Ya no necesitamos loading - usuario se carga sincronamente
 
   const isAuthenticated = !!user;
 
   useEffect(() => {
-    const token = localStorage.getItem('token');
-    const userData = localStorage.getItem('user');
+    // Este efecto solo maneja la configuracion de selectedCompanyId
+    if (user) {
+      const selectedCompanyId = localStorage.getItem('selectedCompanyId');
 
-    if (token && userData) {
-      try {
-        const user = JSON.parse(userData);
-        setUser(user);
-
-        // Asegurar que selectedCompanyId esté establecido
-        const selectedCompanyId = localStorage.getItem('selectedCompanyId');
-
-        // SIEMPRE establecer 'ALL' para super_admin (forzar corrección de sesiones antiguas)
-        if (user.role === 'super_admin') {
-          if (selectedCompanyId !== 'ALL') {
-            localStorage.setItem('selectedCompanyId', 'ALL');
-            console.log('✅ Super admin: Forzando selectedCompanyId a ALL (corrigiendo sesión antigua)');
-          }
-        } else if (!selectedCompanyId) {
-          // Para otros roles, solo establecer si no existe
-          if (user.companyRoles && Object.keys(user.companyRoles).length > 0) {
-            const firstCompanyId = Object.keys(user.companyRoles)[0];
-            localStorage.setItem('selectedCompanyId', firstCompanyId);
-            console.log('✅ Company ID establecido al cargar:', firstCompanyId);
-          } else if (user.company_id) {
-            localStorage.setItem('selectedCompanyId', user.company_id);
-            console.log('✅ Company ID (legacy) establecido al cargar:', user.company_id);
-          }
+      // SIEMPRE establecer 'ALL' para super_admin (forzar correccion de sesiones antiguas)
+      if (user.role === 'super_admin') {
+        if (selectedCompanyId !== 'ALL') {
+          localStorage.setItem('selectedCompanyId', 'ALL');
+          console.log('✅ Super admin: Forzando selectedCompanyId a ALL (corrigiendo sesion antigua)');
         }
-
-        setLoading(false);
-      } catch (error) {
-        console.error('Error parsing user data:', error);
-        localStorage.removeItem('token');
-        localStorage.removeItem('user');
-        localStorage.removeItem('selectedCompanyId');
-        setLoading(false);
+      } else if (!selectedCompanyId) {
+        // Para otros roles, solo establecer si no existe
+        if (user.companyRoles && Object.keys(user.companyRoles).length > 0) {
+          const firstCompanyId = Object.keys(user.companyRoles)[0];
+          localStorage.setItem('selectedCompanyId', firstCompanyId);
+          console.log('✅ Company ID establecido al cargar:', firstCompanyId);
+        } else if (user.company_id) {
+          localStorage.setItem('selectedCompanyId', user.company_id);
+          console.log('✅ Company ID (legacy) establecido al cargar:', user.company_id);
+        }
       }
-    } else {
-      setLoading(false);
     }
-  }, []);
+  }, [user]);
 
   const login = async (email: string, password: string) => {
     try {

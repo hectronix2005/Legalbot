@@ -18,7 +18,8 @@ import './App.css';
 
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { isAuthenticated } = useAuth();
-  return isAuthenticated ? <>{children}</> : <Navigate to="/login" />;
+  // El usuario ya se carga SINCRONAMENTE desde localStorage, no hay flash de redirect
+  return isAuthenticated ? <>{children}</> : <Navigate to="/login" replace />;
 };
 
 const AppContent: React.FC = () => {
@@ -29,7 +30,7 @@ const AppContent: React.FC = () => {
       {isAuthenticated && <Navbar />}
       <main className="main-content">
         <Routes>
-          <Route path="/login" element={!isAuthenticated ? <Login /> : <Navigate to="/dashboard" />} />
+          <Route path="/login" element={!isAuthenticated ? <Login /> : <Navigate to="/dashboard" replace />} />
           <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
           <Route path="/contracts" element={<ProtectedRoute><Contracts /></ProtectedRoute>} />
           <Route path="/contract-generator" element={<ProtectedRoute><ContractGenerator /></ProtectedRoute>} />
@@ -51,7 +52,7 @@ const AppContent: React.FC = () => {
           <Route path="/third-party-types" element={<Navigate to="/terceros?tab=tipos" replace />} />
           <Route path="/supplier-contracts" element={<Navigate to="/terceros?tab=contratos" replace />} />
           <Route path="/contract-categories" element={<Navigate to="/terceros?tab=categorias" replace />} />
-          <Route path="/" element={<Navigate to={isAuthenticated ? "/dashboard" : "/login"} />} />
+          <Route path="/" element={<Navigate to={isAuthenticated ? "/dashboard" : "/login"} replace />} />
         </Routes>
       </main>
     </div>
