@@ -19,7 +19,7 @@ const userSchema = new mongoose.Schema({
   role: {
     type: String,
     required: true,
-    enum: ['super_admin', 'admin', 'lawyer', 'requester']
+    enum: ['super_admin', 'admin', 'lawyer', 'requester', 'talento_humano', 'colaboradores']
   },
   // Removido: company directa, ahora se maneja a través de UserCompany
   // company: {

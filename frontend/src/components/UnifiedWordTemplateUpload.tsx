@@ -92,7 +92,7 @@ const UnifiedWordTemplateUpload: React.FC<UnifiedWordTemplateUploadProps> = ({
       try {
         // Agregar cache-busting con timestamp para forzar recarga
         const cacheBuster = `?t=${Date.now()}`;
-        const response = await api.get(`/templates/third-party-types${cacheBuster}`);
+        const response = await api.get(`/third-party-types${cacheBuster}`);
         const types = response.data || [];
 
         console.log('🔍 [DEBUG] Tipos de terceros recibidos (UnifiedWordTemplateUpload):', types.length);

@@ -3,10 +3,17 @@ const router = express.Router();
 const { authenticate, verifyTenant, authorize } = require('../middleware/auth');
 const { body, validationResult } = require('express-validator');
 const Supplier = require('../models/Supplier');
+const SupplierAuditLog = require('../models/SupplierAuditLog');
 const ActivityLog = require('../models/ActivityLog');
 const ThirdPartyTypeConfig = require('../models/ThirdPartyTypeConfig');
 const Contract = require('../models/Contract');
 const ContractTemplate = require('../models/ContractTemplate');
+const {
+  preventBulkDeletion,
+  backupBeforeCriticalOperation,
+  auditSupplierOperation,
+  validateNotInUse
+} = require('../middleware/supplierProtection');
 
 // Obtener tipos de terceros disponibles
 router.get('/types', authenticate, async (req, res) => {
@@ -44,7 +51,7 @@ router.get('/types', authenticate, async (req, res) => {
 // Obtener todos los proveedores de la empresa (o todos si es super_admin)
 router.get('/', authenticate, verifyTenant, async (req, res) => {
   try {
-    const { active } = req.query;
+    const { active, includeDeleted } = req.query;
 
     const filter = {};
 
@@ -59,9 +66,15 @@ router.get('/', authenticate, verifyTenant, async (req, res) => {
       filter.active = active === 'true';
     }
 
+    // PROTECCIÓN: Por defecto, NO mostrar eliminados
+    if (includeDeleted !== 'true') {
+      filter.deleted = { $ne: true };
+    }
+
     const suppliers = await Supplier.find(filter)
       .populate('created_by', 'name email')
       .populate('updated_by', 'name email')
+      .populate('deletedBy', 'name email')
       .populate('company', 'name')
       .populate('third_party_type', 'code label icon fields default_identification_types')
       .sort({ createdAt: -1 });
@@ -155,10 +168,13 @@ router.get('/:id', authenticate, verifyTenant, async (req, res) => {
   try {
     const { includeSuggestions } = req.query;
 
-    const supplier = await Supplier.findOne({
-      _id: req.params.id,
-      company: req.companyId
-    })
+    // Build query - handle super_admin with ALL access
+    const query = { _id: req.params.id };
+    if (req.companyId && req.companyId !== 'ALL') {
+      query.company = req.companyId;
+    }
+
+    const supplier = await Supplier.findOne(query)
       .populate('created_by', 'name email')
       .populate('updated_by', 'name email')
       .populate('company', 'name')
@@ -203,12 +219,17 @@ router.get('/:id', authenticate, verifyTenant, async (req, res) => {
           });
         }
 
-        // Buscar plantillas que usan este tipo de tercero
-        const templates = await ContractTemplate.find({
-          company: req.companyId,
+        // Build query - handle super_admin with ALL access
+        const templatesQuery = {
           active: true,
           third_party_type: supplier.third_party_type.code
-        }).select('name category fields');
+        };
+        if (supplier.company && supplier.company.toString() !== 'ALL') {
+          templatesQuery.company = supplier.company;
+        }
+
+        // Buscar plantillas que usan este tipo de tercero
+        const templates = await ContractTemplate.find(templatesQuery).select('name category fields');
 
         const templateSuggestions = [];
 
@@ -333,7 +354,10 @@ router.post('/',
 
       const errors = validationResult(req);
       if (!errors.isEmpty()) {
-        console.log('❌ Errores de validación:', errors.array());
+        console.log('❌ Errores de validación:', JSON.stringify(errors.array(), null, 2));
+        // DO NOT LOG PII - Sanitize request body before logging (GDPR/CCPA compliance)
+        const { sanitizeRequestBody } = require('../utils/sanitizeLogs');
+        console.log('📦 Request body (sanitized):', JSON.stringify(sanitizeRequestBody(req.body), null, 2));
         return res.status(400).json({ errors: errors.array() });
       }
 
@@ -357,11 +381,25 @@ router.post('/',
         custom_fields
       } = req.body;
 
+      // Determinar la empresa: usar company del body si existe, sino req.companyId
+      // Super admins deben especificar la empresa en el body
+      let targetCompany = req.body.company || req.companyId;
+
+      // Validar que super_admin proporcione una empresa específica
+      if (req.user.role === 'super_admin' && (!targetCompany || targetCompany === 'ALL')) {
+        return res.status(400).json({
+          error: 'Los super administradores deben especificar una empresa al crear un tercero'
+        });
+      }
+
+      // Build query - handle super_admin with ALL access
+      const duplicateQuery = { identification_number };
+      if (targetCompany && targetCompany !== 'ALL') {
+        duplicateQuery.company = targetCompany;
+      }
+
       // Verificar si ya existe un proveedor con ese número de identificación en esta empresa
-      const existingSupplier = await Supplier.findOne({
-        company: req.companyId,
-        identification_number
-      });
+      const existingSupplier = await Supplier.findOne(duplicateQuery);
 
       if (existingSupplier) {
         return res.status(400).json({
@@ -388,7 +426,7 @@ router.post('/',
         country,
         third_party_type,
         custom_fields: custom_fields || {},
-        company: req.companyId,
+        company: targetCompany,
         created_by: req.user.id
       });
 
@@ -400,7 +438,7 @@ router.post('/',
         entity_type: 'supplier',
         entity_id: supplier._id,
         description: `Creó el tercero: ${displayName}`,
-        company: req.companyId
+        company: targetCompany
       });
 
       res.status(201).json({
@@ -422,10 +460,13 @@ router.put('/:id',
   authorize('super_admin', 'admin', 'lawyer'),
   async (req, res) => {
     try {
-      const supplier = await Supplier.findOne({
-        _id: req.params.id,
-        company: req.companyId
-      });
+      // Build query - handle super_admin with ALL access
+      const query = { _id: req.params.id };
+      if (req.companyId && req.companyId !== 'ALL') {
+        query.company = req.companyId;
+      }
+
+      const supplier = await Supplier.findOne(query);
 
       if (!supplier) {
         return res.status(404).json({ error: 'Proveedor no encontrado' });
@@ -452,11 +493,16 @@ router.put('/:id',
 
       // Si se está cambiando el número de identificación, verificar que no exista otro con ese número
       if (identification_number && identification_number !== supplier.identification_number) {
-        const existingSupplier = await Supplier.findOne({
-          company: req.companyId,
+        // Build query - handle super_admin with ALL access
+        const duplicateQuery = {
           identification_number,
           _id: { $ne: req.params.id }
-        });
+        };
+        if (supplier.company && supplier.company.toString() !== 'ALL') {
+          duplicateQuery.company = supplier.company;
+        }
+
+        const existingSupplier = await Supplier.findOne(duplicateQuery);
 
         if (existingSupplier) {
           return res.status(400).json({
@@ -493,7 +539,7 @@ router.put('/:id',
         entity_type: 'supplier',
         entity_id: supplier._id,
         description: `Actualizó el proveedor: ${supplier.legal_name}`,
-        company: req.companyId
+        company: supplier.company
       });
 
       res.json({
@@ -515,10 +561,13 @@ router.patch('/:id/toggle-status',
   authorize('super_admin', 'admin', 'lawyer'),
   async (req, res) => {
     try {
-      const supplier = await Supplier.findOne({
-        _id: req.params.id,
-        company: req.companyId
-      });
+      // Build query - handle super_admin with ALL access
+      const query = { _id: req.params.id };
+      if (req.companyId && req.companyId !== 'ALL') {
+        query.company = req.companyId;
+      }
+
+      const supplier = await Supplier.findOne(query);
 
       if (!supplier) {
         return res.status(404).json({ error: 'Proveedor no encontrado' });
@@ -535,7 +584,7 @@ router.patch('/:id/toggle-status',
         entity_type: 'supplier',
         entity_id: supplier._id,
         description: `${supplier.active ? 'Activó' : 'Desactivó'} el proveedor: ${supplier.legal_name}`,
-        company: req.companyId
+        company: supplier.company
       });
 
       res.json({
@@ -550,55 +599,77 @@ router.patch('/:id/toggle-status',
   }
 );
 
-// Eliminar proveedor (solo si no tiene referencias)
+// SOFT DELETE de proveedor con protección robusta
 router.delete('/:id',
   authenticate,
   verifyTenant,
   authorize('super_admin', 'admin', 'lawyer'),
+  preventBulkDeletion,
+  validateNotInUse,
+  auditSupplierOperation('DELETE'),
   async (req, res) => {
     try {
-      const supplier = await Supplier.findOne({
-        _id: req.params.id,
-        company: req.companyId
-      }).populate('third_party_type', 'code');
+      // Build query - handle super_admin with ALL access
+      const query = { _id: req.params.id };
+      if (req.companyId && req.companyId !== 'ALL') {
+        query.company = req.companyId;
+      }
+
+      const supplier = await Supplier.findOne(query).populate('third_party_type', 'code');
 
       if (!supplier) {
         return res.status(404).json({ error: 'Tercero no encontrado' });
       }
 
-      // Verificar referencias antes de eliminar
-      const contractsWithReference = await Contract.find({
-        company: req.companyId,
+      // Verificar si ya está eliminado
+      if (supplier.deleted) {
+        return res.status(400).json({
+          error: 'Este tercero ya fue eliminado',
+          deletedAt: supplier.deletedAt,
+          suggestion: 'Usa el endpoint de restauración si necesitas recuperarlo'
+        });
+      }
+
+      // Build query for contract references - handle super_admin with ALL access
+      const contractQuery = {
         $or: [
           { content: { $regex: supplier.legal_name, $options: 'i' } },
           { content: { $regex: supplier.identification_number, $options: 'i' } },
           { title: { $regex: supplier.legal_name, $options: 'i' } }
         ]
-      }).countDocuments();
+      };
+      if (supplier.company && supplier.company.toString() !== 'ALL') {
+        contractQuery.company = supplier.company;
+      }
+
+      // Verificar referencias antes de eliminar
+      const contractsWithReference = await Contract.find(contractQuery).countDocuments();
 
       let templatesWithType = 0;
       if (supplier.third_party_type) {
-        templatesWithType = await ContractTemplate.find({
-          company: req.companyId,
+        // Build query for template references - handle super_admin with ALL access
+        const templateQuery = {
           third_party_type: supplier.third_party_type.code,
           active: true
-        }).countDocuments();
+        };
+        if (supplier.company && supplier.company.toString() !== 'ALL') {
+          templateQuery.company = supplier.company;
+        }
+
+        templatesWithType = await ContractTemplate.find(templateQuery).countDocuments();
       }
 
-      // Si tiene referencias, no permitir eliminación
+      // Si tiene referencias, advertir pero permitir soft delete
       if (contractsWithReference > 0 || templatesWithType > 0) {
-        return res.status(400).json({
-          error: 'No se puede eliminar este tercero porque tiene referencias en contratos o plantillas',
-          details: {
-            contracts: contractsWithReference,
-            templates: templatesWithType
-          },
-          suggestion: 'Desactiva el tercero en lugar de eliminarlo'
-        });
+        console.warn(`⚠️  Soft-deleting tercero con referencias: ${supplier.legal_name}`);
+        console.warn(`   Contratos: ${contractsWithReference}, Plantillas: ${templatesWithType}`);
       }
 
-      // Si no tiene referencias, permitir eliminación
-      await Supplier.deleteOne({ _id: req.params.id });
+      // SOFT DELETE en lugar de eliminación física
+      const reason = req.body.reason || req.query.reason || 'No especificada';
+      await supplier.softDelete(req.user.id, reason);
+
+      console.log(`🗑️  Tercero marcado como eliminado (soft delete): ${supplier.legal_name}`);
 
       // Log de actividad
       await ActivityLog.create({
@@ -606,17 +677,241 @@ router.delete('/:id',
         action: 'DELETE',
         entity_type: 'supplier',
         entity_id: req.params.id,
-        description: `Eliminó el tercero: ${supplier.legal_name}`,
-        company: req.companyId
+        description: `Eliminó el tercero: ${supplier.legal_name} (soft delete)`,
+        company: supplier.company
       });
 
       res.json({
         success: true,
-        message: 'Tercero eliminado exitosamente'
+        message: 'Tercero eliminado exitosamente',
+        recoverable: true,
+        info: 'El tercero puede ser restaurado desde la sección de terceros eliminados'
       });
     } catch (error) {
       console.error('Error al eliminar tercero:', error);
       res.status(500).json({ error: 'Error al eliminar tercero' });
+    }
+  }
+);
+
+// ===================================================================
+// ENDPOINTS DE RECUPERACIÓN Y AUDITORÍA
+// ===================================================================
+
+/**
+ * GET /api/suppliers/deleted
+ * Obtener terceros eliminados (soft deleted)
+ */
+router.get('/deleted/list',
+  authenticate,
+  verifyTenant,
+  authorize('super_admin', 'admin'),
+  async (req, res) => {
+    try {
+      const filter = { deleted: true };
+
+      if (req.companyId && req.companyId !== 'ALL') {
+        filter.company = req.companyId;
+      }
+
+      const deletedSuppliers = await Supplier.find(filter)
+        .populate('deletedBy', 'name email')
+        .populate('company', 'name')
+        .populate('third_party_type', 'code label')
+        .sort({ deletedAt: -1 })
+        .limit(100);
+
+      res.json({
+        success: true,
+        count: deletedSuppliers.length,
+        suppliers: deletedSuppliers
+      });
+    } catch (error) {
+      console.error('Error al obtener terceros eliminados:', error);
+      res.status(500).json({ error: 'Error al obtener terceros eliminados' });
+    }
+  }
+);
+
+/**
+ * POST /api/suppliers/:id/restore
+ * Restaurar un tercero eliminado
+ */
+router.post('/:id/restore',
+  authenticate,
+  verifyTenant,
+  authorize('super_admin', 'admin'),
+  auditSupplierOperation('RESTORE'),
+  async (req, res) => {
+    try {
+      const query = { _id: req.params.id };
+      if (req.companyId && req.companyId !== 'ALL') {
+        query.company = req.companyId;
+      }
+
+      const supplier = await Supplier.findOne(query);
+
+      if (!supplier) {
+        return res.status(404).json({ error: 'Tercero no encontrado' });
+      }
+
+      if (!supplier.deleted) {
+        return res.status(400).json({
+          error: 'Este tercero no está eliminado',
+          message: 'Solo se pueden restaurar terceros que han sido eliminados'
+        });
+      }
+
+      // Restaurar
+      await supplier.restore();
+
+      console.log(`♻️  Tercero restaurado: ${supplier.legal_name}`);
+
+      // Log de actividad
+      await ActivityLog.create({
+        user: req.user.id,
+        action: 'RESTORE',
+        entity_type: 'supplier',
+        entity_id: supplier._id,
+        description: `Restauró el tercero: ${supplier.legal_name}`,
+        company: supplier.company
+      });
+
+      res.json({
+        success: true,
+        message: 'Tercero restaurado exitosamente',
+        supplier
+      });
+    } catch (error) {
+      console.error('Error al restaurar tercero:', error);
+      res.status(500).json({ error: 'Error al restaurar tercero' });
+    }
+  }
+);
+
+/**
+ * GET /api/suppliers/:id/audit-history
+ * Obtener historial de auditoría de un tercero
+ */
+router.get('/:id/audit-history',
+  authenticate,
+  verifyTenant,
+  authorize('super_admin', 'admin'),
+  async (req, res) => {
+    try {
+      const { limit = 50, skip = 0 } = req.query;
+
+      const history = await SupplierAuditLog.getSupplierHistory(
+        req.params.id,
+        { limit: parseInt(limit), skip: parseInt(skip) }
+      );
+
+      res.json({
+        success: true,
+        count: history.length,
+        history
+      });
+    } catch (error) {
+      console.error('Error al obtener historial:', error);
+      res.status(500).json({ error: 'Error al obtener historial de auditoría' });
+    }
+  }
+);
+
+/**
+ * GET /api/suppliers/audit/suspicious
+ * Obtener operaciones sospechosas
+ */
+router.get('/audit/suspicious',
+  authenticate,
+  verifyTenant,
+  authorize('super_admin'),
+  async (req, res) => {
+    try {
+      const { limit = 100, hours = 24 } = req.query;
+
+      const since = new Date(Date.now() - parseInt(hours) * 60 * 60 * 1000);
+
+      const suspicious = await SupplierAuditLog.getSuspiciousOperations({
+        limit: parseInt(limit),
+        since
+      });
+
+      res.json({
+        success: true,
+        count: suspicious.length,
+        operations: suspicious
+      });
+    } catch (error) {
+      console.error('Error al obtener operaciones sospechosas:', error);
+      res.status(500).json({ error: 'Error al obtener operaciones sospechosas' });
+    }
+  }
+);
+
+/**
+ * DELETE /api/suppliers/:id/permanent
+ * Eliminación PERMANENTE (solo super_admin, requiere confirmación)
+ */
+router.delete('/:id/permanent',
+  authenticate,
+  verifyTenant,
+  authorize('super_admin'),
+  backupBeforeCriticalOperation,
+  async (req, res) => {
+    try {
+      const { confirmation } = req.body;
+
+      if (confirmation !== 'DELETE_PERMANENTLY') {
+        return res.status(400).json({
+          error: 'Se requiere confirmación explícita',
+          message: 'Debes enviar { "confirmation": "DELETE_PERMANENTLY" } para confirmar la eliminación permanente',
+          warning: 'Esta acción NO se puede deshacer'
+        });
+      }
+
+      const query = { _id: req.params.id };
+      if (req.companyId && req.companyId !== 'ALL') {
+        query.company = req.companyId;
+      }
+
+      const supplier = await Supplier.findOne(query);
+
+      if (!supplier) {
+        return res.status(404).json({ error: 'Tercero no encontrado' });
+      }
+
+      // Crear log de auditoría antes de eliminar
+      await SupplierAuditLog.logOperation({
+        supplier: supplier._id,
+        operation: 'PERMANENT_DELETE',
+        performedBy: req.user._id || req.user.id,
+        company: supplier.company,
+        stateBefore: supplier,
+        stateAfter: null,
+        ipAddress: req.ip,
+        userAgent: req.get('User-Agent'),
+        reason: req.body.reason || 'Eliminación permanente solicitada',
+        metadata: {
+          backupFile: req.backupFile,
+          warning: 'PERMANENT_DELETION'
+        }
+      });
+
+      // Eliminación física
+      await Supplier.deleteOne({ _id: req.params.id });
+
+      console.error(`🚨 ELIMINACIÓN PERMANENTE: ${supplier.legal_name} por ${req.user.email}`);
+
+      res.json({
+        success: true,
+        message: 'Tercero eliminado permanentemente',
+        warning: 'Esta acción no se puede deshacer',
+        backupFile: req.backupFile
+      });
+    } catch (error) {
+      console.error('Error en eliminación permanente:', error);
+      res.status(500).json({ error: 'Error en eliminación permanente' });
     }
   }
 );

@@ -17,6 +17,7 @@ const {
   fullSystemCheck,
   updateKnownGoodCounts
 } = require('./services/dataLossProtection');
+const { initDailyAudit } = require('./jobs/vacationAuditJob');
 
 const app = express();
 const PORT = process.env.PORT || 3002;
@@ -28,6 +29,107 @@ let mongoConnected = false;
 connectDB().then(() => {
   mongoConnected = true;
   console.log('✅ MongoDB listo para backups');
+
+  // ===================================================================
+  // SISTEMA DE PROTECCIÓN DE DATOS AUTOMÁTICO
+  // ===================================================================
+
+  // 1. Backup automático cada 6 horas
+  const BACKUP_INTERVAL = 6 * 60 * 60 * 1000; // 6 horas
+  setInterval(async () => {
+    try {
+      console.log('\n⏰ Ejecutando backup automático programado...');
+      const backup = await createFullBackup('HOURLY');
+      if (backup) {
+        console.log(`✅ Backup automático completado: ${backup.filename}`);
+      }
+    } catch (error) {
+      console.error('❌ Error en backup automático:', error);
+    }
+  }, BACKUP_INTERVAL);
+
+  // 2. Limpieza de backups antiguos cada 24 horas
+  const CLEANUP_INTERVAL = 24 * 60 * 60 * 1000; // 24 horas
+  setInterval(async () => {
+    try {
+      console.log('\n🧹 Limpiando backups antiguos...');
+      const result = await cleanOldBackups();
+      console.log(`✅ Limpieza completada: ${result.deleted} backups eliminados, ${result.remaining} restantes`);
+    } catch (error) {
+      console.error('❌ Error en limpieza de backups:', error);
+    }
+  }, CLEANUP_INTERVAL);
+
+  // 3. Backup semanal cada domingo a las 2am
+  const scheduleWeeklyBackup = () => {
+    const now = new Date();
+    const nextSunday = new Date();
+    nextSunday.setDate(now.getDate() + (7 - now.getDay()));
+    nextSunday.setHours(2, 0, 0, 0);
+
+    const timeUntilSunday = nextSunday.getTime() - now.getTime();
+
+    setTimeout(async () => {
+      try {
+        console.log('\n📅 Creando backup semanal...');
+        await promoteToWeekly();
+        scheduleWeeklyBackup(); // Programar el próximo
+      } catch (error) {
+        console.error('❌ Error en backup semanal:', error);
+      }
+    }, timeUntilSunday);
+  };
+  scheduleWeeklyBackup();
+
+  // 4. Monitoreo de integridad de datos cada 15 minutos
+  startMonitoring(15);
+
+  // 5. Verificación inicial de integridad
+  setTimeout(async () => {
+    try {
+      console.log('\n🔍 Verificación inicial de integridad de datos...');
+      const integrity = await verifyDataIntegrity();
+      if (integrity.healthy) {
+        console.log('✅ Integridad de datos verificada exitosamente');
+      } else {
+        console.error('❌ ADVERTENCIA: Problemas de integridad detectados');
+        console.error('   Advertencias:', integrity.warnings);
+      }
+    } catch (error) {
+      console.error('Error en verificación inicial:', error);
+    }
+  }, 5000); // Esperar 5 segundos después del inicio
+
+  // 6. Backup inicial al arrancar
+  setTimeout(async () => {
+    try {
+      console.log('\n💾 Creando backup inicial...');
+      const backup = await createFullBackup('STARTUP');
+      if (backup) {
+        console.log(`✅ Backup inicial creado: ${backup.filename}`);
+      }
+    } catch (error) {
+      console.error('Error creando backup inicial:', error);
+    }
+  }, 10000); // Esperar 10 segundos después del inicio
+
+  // 7. Sistema de auditoría automática de vacaciones
+  try {
+    initDailyAudit();
+    console.log('✅ Sistema de auditoría de vacaciones activado (2 AM diario)');
+  } catch (error) {
+    console.error('Error iniciando sistema de auditoría de vacaciones:', error);
+  }
+
+  console.log('\n🛡️  SISTEMA DE PROTECCIÓN DE DATOS ACTIVADO');
+  console.log('   ✓ Backups automáticos cada 6 horas');
+  console.log('   ✓ Backups semanales los domingos');
+  console.log('   ✓ Limpieza automática de backups antiguos');
+  console.log('   ✓ Monitoreo de integridad cada 15 minutos');
+  console.log('   ✓ Soft delete habilitado para terceros');
+  console.log('   ✓ Auditoría completa de operaciones');
+  console.log('   ✓ Auditoría automática de vacaciones (2 AM diario)\n');
+
 }).catch(error => {
   console.error('Error conectando a MongoDB:', error);
 });
@@ -102,6 +204,8 @@ const contractRequestsImprovedRoutes = require('./routes/contract-requests-impro
 const dataMigrationRoutes = require('./routes/data-migration');
 const supplierFieldSuggestionsRoutes = require('./routes/supplier-field-suggestions');
 const fieldManagementRoutes = require('./routes/field-management');
+const thirdPartyProfilesRoutes = require('./routes/third-party-profiles');
+const vacationRoutes = require('./routes/vacations');
 
 // Usar rutas
 app.use('/api/auth', authRoutes);
@@ -128,6 +232,8 @@ app.use('/api/contract-requests-v2', contractRequestsImprovedRoutes);
 app.use('/api/data-migration', dataMigrationRoutes);
 app.use('/api/supplier-field-suggestions', supplierFieldSuggestionsRoutes);
 app.use('/api/field-management', fieldManagementRoutes);
+app.use('/api/third-party-profiles', thirdPartyProfilesRoutes);
+app.use('/api/vacations', vacationRoutes);
 
 // Ruta raíz - Comentada para permitir que el frontend se sirva en /
 // La información de la API está disponible en /api/health
@@ -173,7 +279,25 @@ for (const possiblePath of possibleFrontendPaths) {
 
 if (frontendPath) {
   console.log(`📁 Sirviendo frontend desde: ${frontendPath}`);
-  app.use(express.static(frontendPath));
+
+  // Servir archivos estáticos con cache control
+  app.use(express.static(frontendPath, {
+    setHeaders: (res, filePath) => {
+      // No cachear HTML files para evitar problemas con actualizaciones
+      if (filePath.endsWith('.html')) {
+        res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+        res.setHeader('Pragma', 'no-cache');
+        res.setHeader('Expires', '0');
+      }
+      // TEMPORALMENTE: No cachear JS y CSS para forzar actualización
+      // TODO: Volver a max-age=300 después de que usuarios actualicen
+      else if (filePath.endsWith('.js') || filePath.endsWith('.css')) {
+        res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+        res.setHeader('Pragma', 'no-cache');
+        res.setHeader('Expires', '0');
+      }
+    }
+  }));
 
   // Todas las rutas que no sean API deben servir el index.html (SPA)
   app.get('*', (req, res, next) => {
@@ -181,6 +305,10 @@ if (frontendPath) {
     if (req.path.startsWith('/api')) {
       return next();
     }
+    // Enviar index.html con headers no-cache
+    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
     res.sendFile(path.join(frontendPath, 'index.html'));
   });
 } else {
@@ -240,13 +368,13 @@ const initializeDataProtection = async () => {
       console.log(`   - ${coll}: ${count} documentos`);
     });
 
-    // Crear backup inicial
-    console.log('\n📦 Creando backup inicial...');
-    await createFullBackup('STARTUP');
+    // Crear backup inicial - DISABLED to prevent nodemon restart loop
+    // console.log('\n📦 Creando backup inicial...');
+    // await createFullBackup('STARTUP');
 
-    // Limpiar backups antiguos
-    console.log('\n🧹 Limpiando backups antiguos...');
-    await cleanOldBackups();
+    // Limpiar backups antiguos - DISABLED to prevent nodemon restart loop
+    // console.log('\n🧹 Limpiando backups antiguos...');
+    // await cleanOldBackups();
 
     // Programar backups cada hora
     console.log('\n⏰ Programando backups automáticos cada hora...');

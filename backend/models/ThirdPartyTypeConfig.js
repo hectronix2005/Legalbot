@@ -129,7 +129,7 @@ const thirdPartyTypeConfigSchema = new mongoose.Schema({
 });
 
 // Índices
-thirdPartyTypeConfigSchema.index({ code: 1 });
+// Note: code field already has unique:true which creates an index automatically
 thirdPartyTypeConfigSchema.index({ active: 1 });
 thirdPartyTypeConfigSchema.index({ isGeneric: 1 });
 thirdPartyTypeConfigSchema.index({ companies: 1 });

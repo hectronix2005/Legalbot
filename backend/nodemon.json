@@ -1,0 +1,17 @@
+{
+  "ignore": [
+    "backups/*",
+    "uploads/*",
+    "database/*",
+    "node_modules/*",
+    "public/*"
+  ],
+  "watch": [
+    "*.js",
+    "routes/*.js",
+    "models/*.js",
+    "middleware/*.js",
+    "services/*.js",
+    "config/*.js"
+  ]
+}

@@ -871,19 +871,32 @@ const UnifiedTemplates: React.FC = () => {
         'nit': 'identification_number',
         'numero_de_identificacion': 'identification_number',
         'numero_identificacion': 'identification_number',
+        'numero_de_cedula': 'identification_number',
+        'numero_cedula': 'identification_number',
+        'cedula_numero': 'identification_number',
+        'numero_documento': 'identification_number',
+        'documento': 'identification_number',
         // 'cedula' se mapea dinámicamente más abajo según el contexto
         'cc': 'identification_number',
         'tipo_de_identificacion': 'identification_type',
         'tipo_identificacion': 'identification_type',
 
-        // Razón social / Nombre legal
+        // Razón social / Nombre legal (para empresas)
         'nombre_de_la_propiedad_horizontal': 'legal_name',
         'nombre_propiedad_horizontal': 'legal_name',
         'razon_social': 'legal_name',
-        'nombre_completo': 'legal_name',
-        'nombre': 'legal_name',
         'nombre_empresa': 'legal_name',
         'empresa': 'legal_name',
+
+        // Nombre completo (para personas naturales)
+        'nombre_completo': 'full_name',
+        'nombre': 'full_name',
+        'nombre_del_trabajador': 'full_name',
+        'nombre_del_empleado': 'full_name',
+        'nombre_trabajador': 'full_name',
+        'trabajador': 'full_name',
+        'empleado': 'full_name',
+        'nombre_persona': 'full_name',
 
         // Razón social abreviada
         'razon_social_abreviada': 'legal_name_short',
@@ -954,7 +967,7 @@ const UnifiedTemplates: React.FC = () => {
 
         // Si es un campo esperado por el backend, agregarlo a mappedData
         if (requiredBackendFields.includes(mappedKey) ||
-            ['email', 'phone', 'address', 'city', 'country', 'licensee_name'].includes(mappedKey)) {
+            ['email', 'phone', 'address', 'city', 'country', 'licensee_name', 'full_name'].includes(mappedKey)) {
           mappedData[mappedKey] = value;
         } else {
           // Caso contrario, es un campo personalizado
@@ -976,6 +989,7 @@ const UnifiedTemplates: React.FC = () => {
         identification_number: mappedData.identification_number || '',
         legal_name: mappedData.legal_name || '',
         legal_name_short: mappedData.legal_name_short || mappedData.legal_name || '',
+        full_name: mappedData.full_name || mappedData.legal_name || '',
         legal_representative_name: mappedData.legal_representative_name || '',
         legal_representative_id_type: mappedData.legal_representative_id_type || 'CC',
         legal_representative_id_number: mappedData.legal_representative_id_number || '',

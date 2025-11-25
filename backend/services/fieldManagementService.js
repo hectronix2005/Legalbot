@@ -18,6 +18,7 @@ class FieldManagementService {
       .replace(/[\u0300-\u036f]/g, '') // Remover acentos
       .toLowerCase()
       .trim()
+      .replace(/\./g, '_') // ⚠️ CRITICAL: Reemplazar puntos con guiones bajos (Mongoose Maps no soportan puntos)
       .replace(/[_\s\/\-]+/g, '_') // Unificar separadores
       .replace(/_+/g, '_') // Remover duplicados
       .replace(/^_|_$/g, ''); // Remover extremos
@@ -253,13 +254,22 @@ class FieldManagementService {
    * Agrega o actualiza campos en un tercero
    */
   static async updateSupplierFields(supplierId, fieldsToUpdate, userId) {
+    console.log('📝 [FieldManagement] updateSupplierFields called:', {
+      supplierId,
+      fieldsToUpdate,
+      userId
+    });
+
     const supplier = await Supplier.findById(supplierId);
     if (!supplier) {
       throw new Error('Tercero no encontrado');
     }
 
+    console.log('✅ [FieldManagement] Supplier found:', supplier._id);
+
     if (!supplier.custom_fields) {
       supplier.custom_fields = new Map();
+      console.log('🆕 [FieldManagement] Created new custom_fields Map');
     }
 
     const updates = {
@@ -269,14 +279,19 @@ class FieldManagementService {
     };
 
     fieldsToUpdate.forEach(({ name, value, label }) => {
+      console.log('🔄 [FieldManagement] Processing field:', { name, value, label });
+
       const normalizedName = this.normalizeFieldName(name);
+      console.log('  → Normalized name:', normalizedName);
 
       if (!normalizedName) {
+        console.warn('  ⚠️ Invalid field name');
         updates.errors.push({ name, error: 'Nombre de campo inválido' });
         return;
       }
 
       if (value === null || value === undefined) {
+        console.warn('  ⚠️ Null/undefined value');
         updates.errors.push({ name, error: 'Valor no puede ser nulo' });
         return;
       }
@@ -286,6 +301,7 @@ class FieldManagementService {
                            supplier.custom_fields.get(fieldKey);
 
       if (existingValue) {
+        console.log('  ✏️  Updating existing field');
         supplier.custom_fields.set(normalizedName, value);
         updates.fieldsUpdated.push({
           name: normalizedName,
@@ -293,6 +309,7 @@ class FieldManagementService {
           newValue: value
         });
       } else {
+        console.log('  ➕ Adding new field');
         supplier.custom_fields.set(normalizedName, value);
         updates.fieldsAdded.push({
           name: normalizedName,
@@ -301,8 +318,16 @@ class FieldManagementService {
       }
     });
 
+    console.log('💾 [FieldManagement] Saving supplier with updates:', updates);
     supplier.updated_by = userId;
-    await supplier.save();
+
+    try {
+      await supplier.save();
+      console.log('✅ [FieldManagement] Supplier saved successfully');
+    } catch (saveError) {
+      console.error('❌ [FieldManagement] Error saving supplier:', saveError);
+      throw saveError;
+    }
 
     return {
       success: true,

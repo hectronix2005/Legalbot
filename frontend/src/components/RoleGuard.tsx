@@ -4,7 +4,7 @@ import { useCompany } from '../contexts/CompanyContext';
 
 interface RoleGuardProps {
   children: ReactNode;
-  allowedRoles: ('super_admin' | 'admin' | 'lawyer' | 'requester')[];
+  allowedRoles: ('super_admin' | 'admin' | 'lawyer' | 'requester' | 'talento_humano' | 'colaboradores')[];
   fallback?: ReactNode;
 }
 

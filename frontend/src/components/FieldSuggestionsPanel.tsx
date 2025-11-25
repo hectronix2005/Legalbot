@@ -98,6 +98,17 @@ const FieldSuggestionsPanel: React.FC<Props> = ({ supplierId, onFieldsAdded }) =
 
       console.log('💾 Saving field:', currentField.name, '=', fieldValues[currentField.name]);
 
+      // VERIFICAR TOKEN ANTES DE HACER LA REQUEST
+      const token = localStorage.getItem('token');
+      if (!token) {
+        console.error('❌ No hay token en localStorage - Usuario no autenticado');
+        alert('Sesión expirada. Por favor inicia sesión nuevamente.');
+        window.location.href = '/login';
+        return;
+      }
+
+      console.log('✅ Token encontrado:', token.substring(0, 20) + '...');
+
       await api.post(
         `/field-management/supplier/${supplierId}/fields`,
         {
@@ -127,8 +138,82 @@ const FieldSuggestionsPanel: React.FC<Props> = ({ supplierId, onFieldsAdded }) =
       alert('Campo agregado exitosamente');
     } catch (err: any) {
       const errorMsg = err.response?.data?.error || err.message || 'Error al agregar campo';
-      console.error('❌ Error saving field:', err);
-      alert(`Error: ${errorMsg}`);
+
+      // ============================================
+      // DEBUGGING DETALLADO DE ERRORES
+      // ============================================
+      console.group('❌ ERROR AL GUARDAR CAMPO - DEBUG COMPLETO');
+
+      console.error('📋 Datos del Campo:');
+      console.error('  Nombre:', currentField.name);
+      console.error('  Valor:', fieldValues[currentField.name]);
+      console.error('  Label:', currentField.label);
+      console.error('  Supplier ID:', supplierId);
+
+      console.error('\n📡 Respuesta del Servidor:');
+      console.error('  Status:', err.response?.status);
+      console.error('  Status Text:', err.response?.statusText);
+      console.error('  Error Message:', errorMsg);
+
+      if (err.response?.data) {
+        console.error('\n📦 Data Completa del Error:');
+        console.error('  Error Type:', err.response.data.errorType);
+        console.error('  Error:', err.response.data.error);
+        console.error('  Validation Errors:', err.response.data.validationErrors);
+
+        if (err.response.data.details) {
+          console.error('\n🔍 Stack Trace del Servidor:');
+          console.error(err.response.data.details);
+        }
+
+        console.error('\n📄 JSON Completo:');
+        console.error(JSON.stringify(err.response.data, null, 2));
+      }
+
+      console.error('\n🌐 Detalles de la Request:');
+      console.error('  URL:', err.config?.url);
+      console.error('  Method:', err.config?.method);
+      console.error('  Headers:', err.config?.headers);
+      console.error('  Data enviada:', err.config?.data);
+
+      console.error('\n💬 Error del Cliente:');
+      console.error('  Message:', err.message);
+      console.error('  Name:', err.name);
+      console.error('  Code:', err.code);
+
+      if (err.stack) {
+        console.error('\n📚 Stack Trace del Cliente:');
+        console.error(err.stack);
+      }
+
+      console.error('\n🔧 Error Object Completo:');
+      console.error(err);
+
+      console.groupEnd();
+      // ============================================
+
+      // Construir mensaje detallado para el usuario
+      let userMessage = `❌ Error al guardar campo "${currentField.label}"\n\n`;
+      userMessage += `Mensaje: ${errorMsg}\n`;
+
+      if (err.response?.status) {
+        userMessage += `HTTP Status: ${err.response.status}\n`;
+      }
+
+      if (err.response?.data?.errorType) {
+        userMessage += `Tipo: ${err.response.data.errorType}\n`;
+      }
+
+      if (err.response?.data?.validationErrors) {
+        userMessage += `\nErrores de validación:\n`;
+        err.response.data.validationErrors.forEach((field: string) => {
+          userMessage += `  - ${field}\n`;
+        });
+      }
+
+      userMessage += '\n💡 Revisa la consola del navegador (F12) para más detalles técnicos.';
+
+      alert(userMessage);
     } finally {
       setAddingField(false);
     }

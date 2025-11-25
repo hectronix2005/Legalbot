@@ -1,0 +1,135 @@
+{
+  "guardianCI": {
+    "version": "1.0",
+    "executionDate": "2025-11-20T00:00:00Z",
+    "projectName": "Legal Contract Management System",
+    "overallStatus": "FAIL",
+    "releaseBlocked": true,
+    "executionTimeMs": 120000
+  },
+  "summary": {
+    "totalFindings": 9,
+    "critical": 5,
+    "high": 2,
+    "medium": 2,
+    "blockingIssues": 5
+  },
+  "findings": [
+    {
+      "id": "GUARD-001",
+      "severity": "CRITICAL",
+      "category": "Testing",
+      "service": "Frontend",
+      "title": "Frontend Test Suite Failing",
+      "description": "Cannot find module 'react-router-dom' from 'src/App.tsx'",
+      "impact": "Cannot validate frontend functionality, release blocked",
+      "recommendation": {
+        "commands": ["cd frontend", "npm install react-router-dom", "npm test"],
+        "estimatedEffort": "15min"
+      },
+      "blocking": true
+    },
+    {
+      "id": "GUARD-002",
+      "severity": "CRITICAL",
+      "category": "Testing",
+      "service": "Backend",
+      "title": "Zero Backend Test Coverage",
+      "description": "No unit or integration tests for backend",
+      "impact": "0% coverage, high regression risk",
+      "recommendation": {
+        "action": "Create minimum test suite ≥50% coverage",
+        "estimatedEffort": "8 hours"
+      },
+      "blocking": true
+    },
+    {
+      "id": "GUARD-003",
+      "severity": "HIGH",
+      "category": "Security",
+      "service": "Frontend",
+      "title": "High Severity Vulnerabilities",
+      "description": "3 HIGH vulnerabilities: glob, css-select, svgo",
+      "evidence": {
+        "vulnerabilities": [
+          {"package": "glob", "cvss": 7.5, "cve": "GHSA-5j98-mcp5-4vw2"},
+          {"package": "css-select", "via": "nth-check"},
+          {"package": "@svgr/webpack", "via": "svgo"}
+        ]
+      },
+      "recommendation": {
+        "commands": ["cd frontend", "npm audit fix --force"],
+        "estimatedEffort": "30min"
+      },
+      "blocking": true
+    },
+    {
+      "id": "GUARD-004",
+      "severity": "HIGH",
+      "category": "Security",
+      "service": "Backend/Auth",
+      "title": "Anonymous Users in Critical Operations",
+      "description": "DELETE/PUT operations with user='anonymous'",
+      "impact": "Auth bypass, no audit trail, compliance violation",
+      "recommendation": {
+        "action": "Fix authentication middleware on critical routes",
+        "estimatedEffort": "2 hours"
+      },
+      "blocking": true
+    },
+    {
+      "id": "GUARD-005",
+      "severity": "MEDIUM",
+      "category": "Code Quality",
+      "service": "Backend",
+      "title": "Excessive Console Logging",
+      "description": "1774 console.log statements in 91 files",
+      "impact": "Performance, monitoring difficulty",
+      "recommendation": {
+        "action": "Implement winston/pino structured logging",
+        "estimatedEffort": "4 hours"
+      },
+      "blocking": true
+    },
+    {
+      "id": "GUARD-006",
+      "severity": "MODERATE",
+      "category": "Security",
+      "service": "Backend",
+      "title": "js-yaml Vulnerability",
+      "description": "Prototype pollution in js-yaml v4.0.0-4.1.0",
+      "evidence": {"cvss": 5.3, "cve": "GHSA-mh29-5h37-fv8m"},
+      "recommendation": {
+        "commands": ["cd backend", "npm audit fix"],
+        "estimatedEffort": "10min"
+      },
+      "blocking": false
+    },
+    {
+      "id": "GUARD-007",
+      "severity": "MEDIUM",
+      "category": "Configuration",
+      "service": "Backend",
+      "title": "Missing Env Var Validation",
+      "description": "77 files use process.env without validation",
+      "recommendation": {
+        "action": "Create env-validator.js with startup checks",
+        "estimatedEffort": "1 hour"
+      },
+      "blocking": false
+    }
+  ],
+  "gates": {
+    "testsPass": {"status": "FAIL", "blocking": true},
+    "securityAudit": {"status": "FAIL", "blocking": true},
+    "piiLeaks": {"status": "PASS", "blocking": true},
+    "authentication": {"status": "FAIL", "blocking": true}
+  },
+  "metrics": {
+    "testCoverage": {"backend": "0%", "frontend": "N/A", "target": "≥80%"},
+    "securityVulnerabilities": {"high": 3, "moderate": 1, "target": "0"},
+    "consoleLogCount": {"total": 1774, "target": "<50"},
+    "piiLeaks": {"detected": 0, "target": "0"},
+    "nodeVersion": {"actual": "v22.20.0", "status": "PASS"}
+  }
+}

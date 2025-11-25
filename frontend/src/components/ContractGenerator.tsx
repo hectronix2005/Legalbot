@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import api from '../services/api';
+import ThirdPartyProfileSelector from './ThirdPartyProfileSelector';
 import './ContractGenerator.css';
 
 interface TemplateField {
@@ -662,41 +663,20 @@ const ContractGenerator: React.FC = () => {
         <div className="contract-form">
           <h3>2. Completar Información</h3>
 
-          {/* Selector de Terceros */}
-          <div className="supplier-selector-section">
-            <div className="field-group">
-              <label className="field-label">
-                Seleccionar Tercero (Opcional)
-                <span className="field-hint"> - Prellena automáticamente los campos del formulario</span>
-              </label>
-              <select
-                value={selectedSupplier?._id || ''}
-                onChange={(e) => handleSupplierSelect(e.target.value)}
-                className="form-input supplier-select"
-                disabled={loadingSuppliers}
-              >
-                <option value="">-- Seleccionar tercero existente --</option>
-                {suppliers.map(supplier => {
-                  const displayName = supplier.legal_name || supplier.full_name || supplier.identification_number;
-                  const displayId = supplier.identification_number;
-                  return (
-                    <option key={supplier._id} value={supplier._id}>
-                      {displayName} ({displayId})
-                    </option>
-                  );
-                })}
-              </select>
-              {loadingSuppliers && <p className="loading-text">Cargando terceros...</p>}
-              {selectedSupplier && (
-                <div className="selected-supplier-info">
-                  <p className="info-text">
-                    Tercero seleccionado: <strong>{selectedSupplier.legal_name || selectedSupplier.full_name}</strong>
-                  </p>
-                  <p className="info-subtext">Los campos se han prellenado automáticamente. Puedes modificarlos si es necesario.</p>
-                </div>
-              )}
-            </div>
-          </div>
+          {/* Selector de Terceros con Perfiles */}
+          <ThirdPartyProfileSelector
+            templateId={selectedTemplate._id}
+            onProfileSelect={(profileData) => {
+              console.log('📋 Profile data received:', profileData);
+              setContractData(prevData => ({
+                ...prevData,
+                ...profileData
+              }));
+            }}
+            onChange={(profile) => {
+              console.log('🔄 Profile changed:', profile);
+            }}
+          />
 
           {/* Campos únicos */}
           <div className="form-section">

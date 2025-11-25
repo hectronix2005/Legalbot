@@ -122,6 +122,27 @@ const supplierSchema = new mongoose.Schema({
     description: 'Indica si el proveedor está activo (se activa después de aprobación)'
   },
 
+  // Soft delete (para evitar pérdida de datos)
+  deleted: {
+    type: Boolean,
+    default: false,
+    index: true,
+    description: 'Indica si el tercero fue eliminado (soft delete)'
+  },
+  deletedAt: {
+    type: Date,
+    description: 'Fecha de eliminación (soft delete)'
+  },
+  deletedBy: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User',
+    description: 'Usuario que eliminó el tercero'
+  },
+  deletionReason: {
+    type: String,
+    description: 'Razón de la eliminación'
+  },
+
   // Estado de aprobación (NUEVO)
   approval_status: {
     type: String,
@@ -166,5 +187,31 @@ const supplierSchema = new mongoose.Schema({
 // Índices para mejorar rendimiento
 supplierSchema.index({ company: 1, identification_number: 1 }, { unique: true });
 supplierSchema.index({ company: 1, active: 1 });
+supplierSchema.index({ company: 1, deleted: 1 }); // Para queries con soft delete
+supplierSchema.index({ deleted: 1, deletedAt: -1 }); // Para recuperación
+
+// Métodos de instancia para soft delete
+supplierSchema.methods.softDelete = function(userId, reason = '') {
+  this.deleted = true;
+  this.deletedAt = new Date();
+  this.deletedBy = userId;
+  this.deletionReason = reason;
+  this.active = false; // Desactivar también
+  return this.save();
+};
+
+supplierSchema.methods.restore = function() {
+  this.deleted = false;
+  this.deletedAt = null;
+  this.deletedBy = null;
+  this.deletionReason = null;
+  this.active = true; // Restore active state to make supplier usable again
+  return this.save();
+};
+
+// Query helper para filtrar eliminados
+supplierSchema.query.notDeleted = function() {
+  return this.where({ deleted: { $ne: true } });
+};
 
 module.exports = mongoose.model('Supplier', supplierSchema);

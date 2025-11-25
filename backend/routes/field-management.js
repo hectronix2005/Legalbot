@@ -5,8 +5,10 @@
 
 const express = require('express');
 const router = express.Router();
+const util = require('util');
 const { authenticate, authorize, verifyTenant } = require('../middleware/auth');
 const FieldManagementService = require('../services/fieldManagementService');
+const FieldManagementServiceV2 = require('../services/fieldManagementService-v2');
 const Supplier = require('../models/Supplier');
 const ContractTemplate = require('../models/ContractTemplate');
 
@@ -100,9 +102,16 @@ router.get('/supplier/:id/suggestions', authenticate, verifyTenant, async (req, 
  */
 router.post('/supplier/:id/fields', authenticate, verifyTenant, authorize('admin', 'super_admin', 'lawyer'), async (req, res) => {
   try {
+    console.log('📥 [FIELD-MANAGEMENT] POST /supplier/:id/fields', {
+      supplierId: req.params.id,
+      fieldsCount: req.body.fields?.length,
+      userId: req.user._id
+    });
+
     const { fields } = req.body;
 
     if (!fields || !Array.isArray(fields)) {
+      console.warn('⚠️  Invalid fields array');
       return res.status(400).json({ error: 'Se requiere un array de campos' });
     }
 
@@ -116,23 +125,126 @@ router.post('/supplier/:id/fields', authenticate, verifyTenant, authorize('admin
     const supplier = await Supplier.findOne(query);
 
     if (!supplier) {
+      console.warn('⚠️  Supplier not found:', req.params.id);
       return res.status(404).json({ error: 'Tercero no encontrado' });
     }
 
-    const result = await FieldManagementService.updateSupplierFields(
+    console.log('✅ Supplier found, using V2 service');
+
+    // Usar servicio V2 robusto
+    const result = await FieldManagementServiceV2.updateSupplierFields(
       req.params.id,
       fields,
       req.user._id
     );
 
+    console.log('✅ [FIELD-MANAGEMENT] Fields updated successfully:', {
+      added: result.updates.fieldsAdded.length,
+      updated: result.updates.fieldsUpdated.length,
+      errors: result.updates.errors.length
+    });
+
     res.json({
       success: true,
-      message: `${result.updates.fieldsAdded.length} campos agregados, ${result.updates.fieldsUpdated.length} actualizados`,
+      message: `${result.updates.fieldsAdded.length} campos agregados, ${result.updates.fieldsUpdated.length} actualizados${result.updates.errors.length > 0 ? `, ${result.updates.errors.length} errores` : ''}`,
       updates: result.updates
     });
   } catch (error) {
-    console.error('Error actualizando campos:', error);
-    res.status(500).json({ error: 'Error al actualizar campos' });
+    // ============================================
+    // DEBUGGING DETALLADO DE ERRORES - BACKEND
+    // ============================================
+    console.error('\n╔════════════════════════════════════════════════════════════════╗');
+    console.error('║ ❌ ERROR AL ACTUALIZAR CAMPOS - DEBUG COMPLETO                 ║');
+    console.error('╚════════════════════════════════════════════════════════════════╝\n');
+
+    console.error('📋 Contexto de la Request:');
+    console.error('  Supplier ID:', req.params.id);
+    console.error('  User ID:', req.user?._id);
+    console.error('  Company ID:', req.companyId);
+    console.error('  Campos a actualizar:', req.body.fields);
+
+    console.error('\n🔴 Información del Error:');
+    console.error('  Name:', error.name);
+    console.error('  Message:', error.message);
+    console.error('  Code:', error.code);
+
+    // Si es un error de Mongoose
+    if (error.name === 'ValidationError' || error.name === 'CastError') {
+      console.error('\n🔍 Error de Mongoose Detectado:');
+      console.error('  Type:', error.name);
+
+      if (error.errors) {
+        console.error('\n  Errores de Validación:');
+        Object.entries(error.errors).forEach(([field, err]) => {
+          console.error(`    - ${field}:`);
+          console.error(`      Message: ${err.message}`);
+          console.error(`      Value: ${err.value}`);
+          console.error(`      Kind: ${err.kind}`);
+          console.error(`      Path: ${err.path}`);
+        });
+      }
+
+      if (error.reason) {
+        console.error('\n  Razón del CastError:');
+        console.error('    Message:', error.reason.message);
+        console.error('    Value:', error.reason.value);
+      }
+    }
+
+    // Si es un error de MongoDB
+    if (error.code === 11000) {
+      console.error('\n🔍 Error de Duplicado de MongoDB (11000):');
+      console.error('  Index:', error.keyPattern);
+      console.error('  Value:', error.keyValue);
+    }
+
+    console.error('\n📚 Stack Trace Completo:');
+    console.error(error.stack);
+
+    console.error('\n🔧 Error Object Serializado:');
+    console.error(util.inspect(error, {
+      depth: 10,
+      colors: true,
+      showHidden: true
+    }));
+
+    console.error('\n╔════════════════════════════════════════════════════════════════╗');
+    console.error('║ FIN DEL DEBUG                                                  ║');
+    console.error('╚════════════════════════════════════════════════════════════════╝\n');
+    // ============================================
+
+    // Preparar respuesta detallada para el cliente
+    const errorResponse = {
+      error: error.message || 'Error al actualizar campos',
+      errorType: error.name,
+      timestamp: new Date().toISOString()
+    };
+
+    // Agregar detalles en modo desarrollo
+    if (process.env.NODE_ENV === 'development') {
+      errorResponse.details = error.stack;
+      errorResponse.supplierId = req.params.id;
+
+      if (error.errors) {
+        errorResponse.validationErrors = Object.keys(error.errors);
+        errorResponse.validationDetails = Object.entries(error.errors).map(([field, err]) => ({
+          field,
+          message: err.message,
+          value: err.value,
+          kind: err.kind
+        }));
+      }
+
+      if (error.code) {
+        errorResponse.mongoCode = error.code;
+      }
+
+      if (error.reason) {
+        errorResponse.castErrorReason = error.reason.message;
+      }
+    }
+
+    res.status(500).json(errorResponse);
   }
 });
 
@@ -368,6 +480,7 @@ router.get('/required-fields/:typeCode', authenticate, verifyTenant, async (req,
 /**
  * POST /api/field-management/supplier/:id/merge-fields
  * Fusiona múltiples campos en uno solo
+ * Usa findByIdAndUpdate con $set/$unset para evitar problemas con Maps
  */
 router.post('/supplier/:id/merge-fields', authenticate, verifyTenant, authorize('admin', 'super_admin', 'lawyer'), async (req, res) => {
   try {
@@ -396,15 +509,24 @@ router.post('/supplier/:id/merge-fields', authenticate, verifyTenant, authorize(
       query.company = req.companyId;
     }
 
-    // Verificar que el tercero existe y pertenece a la empresa
-    const supplier = await Supplier.findOne(query);
+    // Verificar que el tercero existe y pertenece a la empresa (con timeout)
+    const supplier = await Supplier.findOne(query).maxTimeMS(10000);
 
     if (!supplier) {
       return res.status(404).json({ error: 'Tercero no encontrado' });
     }
 
-    // Obtener custom_fields actuales
-    const customFields = supplier.custom_fields || {};
+    // Obtener custom_fields actuales como objeto plano
+    let customFields = {};
+    if (supplier.custom_fields) {
+      if (supplier.custom_fields instanceof Map) {
+        supplier.custom_fields.forEach((value, key) => {
+          customFields[key] = value;
+        });
+      } else if (typeof supplier.custom_fields === 'object') {
+        customFields = { ...supplier.custom_fields };
+      }
+    }
 
     // Verificar que todos los campos a fusionar existen
     const missingFields = fieldsToMerge.filter(field => !(field in customFields));
@@ -414,27 +536,60 @@ router.post('/supplier/:id/merge-fields', authenticate, verifyTenant, authorize(
       });
     }
 
-    // Crear el nuevo objeto de custom_fields
-    const newCustomFields = { ...customFields };
+    // Preparar operaciones de actualización
+    const updateOps = {
+      $set: {
+        [`custom_fields.${targetFieldName}`]: targetValue,
+        updated_by: req.user._id
+      }
+    };
 
-    // Agregar o actualizar el campo fusionado
-    newCustomFields[targetFieldName] = targetValue;
-
-    // Eliminar los campos originales si se solicita
+    // Si hay que eliminar los campos originales, usar $unset
     if (removeOriginals) {
+      updateOps.$unset = {};
       fieldsToMerge.forEach(field => {
-        delete newCustomFields[field];
+        // No eliminar si es el mismo campo destino
+        if (field !== targetFieldName) {
+          updateOps.$unset[`custom_fields.${field}`] = '';
+        }
       });
+      // Si $unset está vacío, eliminarlo
+      if (Object.keys(updateOps.$unset).length === 0) {
+        delete updateOps.$unset;
+      }
     }
 
-    // Actualizar el tercero
-    supplier.custom_fields = newCustomFields;
-    await supplier.save();
+    console.log('💾 [FIELD-MERGER] Updating with ops:', JSON.stringify(updateOps, null, 2));
+
+    // Usar findByIdAndUpdate para evitar problemas con Maps
+    const updatedSupplier = await Supplier.findByIdAndUpdate(
+      req.params.id,
+      updateOps,
+      {
+        new: true,
+        runValidators: true,
+        maxTimeMS: 15000 // 15 second timeout
+      }
+    );
+
+    if (!updatedSupplier) {
+      return res.status(500).json({ error: 'No se pudo actualizar el tercero' });
+    }
+
+    // Calcular campos finales
+    let finalFieldsCount = 0;
+    if (updatedSupplier.custom_fields) {
+      if (updatedSupplier.custom_fields instanceof Map) {
+        finalFieldsCount = updatedSupplier.custom_fields.size;
+      } else {
+        finalFieldsCount = Object.keys(updatedSupplier.custom_fields).length;
+      }
+    }
 
     console.log('✅ [FIELD-MERGER] Fields merged successfully:', {
       supplierId: req.params.id,
       mergedInto: targetFieldName,
-      removedFields: removeOriginals ? fieldsToMerge : []
+      removedFields: removeOriginals ? fieldsToMerge.filter(f => f !== targetFieldName) : []
     });
 
     res.json({
@@ -445,18 +600,22 @@ router.post('/supplier/:id/merge-fields', authenticate, verifyTenant, authorize(
         targetFieldName,
         targetValue,
         fieldsRemoved: removeOriginals,
-        totalFieldsNow: Object.keys(newCustomFields).length
+        totalFieldsNow: finalFieldsCount
       }
     });
   } catch (error) {
     console.error('❌ [FIELD-MERGER] Error merging fields:', error);
-    res.status(500).json({ error: 'Error al fusionar campos' });
+    res.status(500).json({
+      error: 'Error al fusionar campos',
+      details: error.message
+    });
   }
 });
 
 /**
  * POST /api/field-management/merge-fields-bulk
  * Fusión inteligente masiva: Aplica fusión a todos los terceros del mismo tipo
+ * Usa findByIdAndUpdate con $set/$unset para evitar problemas con Maps
  */
 router.post('/merge-fields-bulk', authenticate, verifyTenant, authorize('admin', 'super_admin'), async (req, res) => {
   try {
@@ -487,8 +646,8 @@ router.post('/merge-fields-bulk', authenticate, verifyTenant, authorize('admin',
       query.company = req.companyId;
     }
 
-    // Obtener todos los terceros del mismo tipo
-    const suppliers = await Supplier.find(query);
+    // Obtener todos los terceros del mismo tipo (con timeout)
+    const suppliers = await Supplier.find(query).maxTimeMS(30000);
 
     console.log(`📊 [BULK-MERGE] Found ${suppliers.length} suppliers of this type`);
 
@@ -496,6 +655,7 @@ router.post('/merge-fields-bulk', authenticate, verifyTenant, authorize('admin',
       total: suppliers.length,
       merged: 0,
       skipped: 0,
+      errors: 0,
       details: []
     };
 
@@ -514,54 +674,85 @@ router.post('/merge-fields-bulk', authenticate, verifyTenant, authorize('admin',
     const normalizedFieldsToMerge = fieldsToMerge.map(normalizeFieldName);
 
     for (const supplier of suppliers) {
-      const customFields = supplier.custom_fields || {};
-
-      // Buscar campos que coincidan con los normalizados
-      const matchingFields = {};
-      Object.keys(customFields).forEach(fieldName => {
-        const normalized = normalizeFieldName(fieldName);
-        if (normalizedFieldsToMerge.includes(normalized)) {
-          matchingFields[fieldName] = customFields[fieldName];
-        }
-      });
-
-      // Si encontramos al menos 2 campos coincidentes, fusionar
-      if (Object.keys(matchingFields).length >= 2) {
-        // Seleccionar el valor no vacío
-        let mergeValue = '';
-        for (const [fieldName, value] of Object.entries(matchingFields)) {
-          if (value && value !== '') {
-            mergeValue = value;
-            break;
+      try {
+        // Obtener custom_fields como objeto plano
+        let customFields = {};
+        if (supplier.custom_fields) {
+          if (supplier.custom_fields instanceof Map) {
+            supplier.custom_fields.forEach((value, key) => {
+              customFields[key] = value;
+            });
+          } else if (typeof supplier.custom_fields === 'object') {
+            customFields = { ...supplier.custom_fields };
           }
         }
 
-        // Crear nuevo objeto de custom_fields
-        const newCustomFields = { ...customFields };
-
-        // Agregar el campo fusionado
-        newCustomFields[targetFieldName] = mergeValue;
-
-        // Eliminar los campos originales
-        Object.keys(matchingFields).forEach(field => {
-          delete newCustomFields[field];
+        // Buscar campos que coincidan con los normalizados
+        const matchingFields = {};
+        Object.keys(customFields).forEach(fieldName => {
+          const normalized = normalizeFieldName(fieldName);
+          if (normalizedFieldsToMerge.includes(normalized)) {
+            matchingFields[fieldName] = customFields[fieldName];
+          }
         });
 
-        // Actualizar el tercero
-        supplier.custom_fields = newCustomFields;
-        await supplier.save();
+        // Si encontramos al menos 2 campos coincidentes, fusionar
+        if (Object.keys(matchingFields).length >= 2) {
+          // Seleccionar el valor no vacío
+          let mergeValue = '';
+          for (const [fieldName, value] of Object.entries(matchingFields)) {
+            if (value && value !== '') {
+              mergeValue = value;
+              break;
+            }
+          }
 
-        results.merged++;
-        results.details.push({
-          supplierId: supplier._id,
-          name: supplier.legal_name || supplier.full_name,
-          mergedFields: Object.keys(matchingFields),
-          value: mergeValue
-        });
+          // Preparar operaciones de actualización
+          const updateOps = {
+            $set: {
+              [`custom_fields.${targetFieldName}`]: mergeValue,
+              updated_by: req.user._id
+            },
+            $unset: {}
+          };
 
-        console.log(`✅ [BULK-MERGE] Merged fields for: ${supplier.legal_name || supplier.full_name}`);
-      } else {
-        results.skipped++;
+          // Eliminar los campos originales (excepto si uno es el campo destino)
+          Object.keys(matchingFields).forEach(field => {
+            if (field !== targetFieldName) {
+              updateOps.$unset[`custom_fields.${field}`] = '';
+            }
+          });
+
+          // Si $unset está vacío, eliminarlo
+          if (Object.keys(updateOps.$unset).length === 0) {
+            delete updateOps.$unset;
+          }
+
+          // Usar findByIdAndUpdate para evitar problemas con Maps
+          await Supplier.findByIdAndUpdate(
+            supplier._id,
+            updateOps,
+            {
+              runValidators: true,
+              maxTimeMS: 10000 // 10 second timeout per update
+            }
+          );
+
+          results.merged++;
+          results.details.push({
+            supplierId: supplier._id,
+            name: supplier.legal_name || supplier.full_name,
+            mergedFields: Object.keys(matchingFields),
+            value: mergeValue
+          });
+
+          console.log(`✅ [BULK-MERGE] Merged fields for: ${supplier.legal_name || supplier.full_name}`);
+        } else {
+          results.skipped++;
+        }
+      } catch (supplierError) {
+        console.error(`❌ [BULK-MERGE] Error updating supplier ${supplier._id}:`, supplierError.message);
+        results.errors++;
       }
     }
 
@@ -569,13 +760,16 @@ router.post('/merge-fields-bulk', authenticate, verifyTenant, authorize('admin',
 
     res.json({
       success: true,
-      message: `Fusión masiva completada: ${results.merged} terceros actualizados`,
+      message: `Fusión masiva completada: ${results.merged} terceros actualizados${results.errors > 0 ? `, ${results.errors} errores` : ''}`,
       results
     });
 
   } catch (error) {
     console.error('❌ [BULK-MERGE] Error in bulk merge:', error);
-    res.status(500).json({ error: 'Error en fusión masiva' });
+    res.status(500).json({
+      error: 'Error en fusión masiva',
+      details: error.message
+    });
   }
 });
 

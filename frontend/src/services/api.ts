@@ -14,7 +14,12 @@ const api = axios.create({
 // Interceptor para agregar token de autenticación y X-Company-Id header
 api.interceptors.request.use((config) => {
   const token = localStorage.getItem('token');
-  if (token) {
+
+  // DEBUG: Log token status
+  if (!token) {
+    console.warn('⚠️ [API Interceptor] No token found in localStorage for request:', config.url);
+  } else {
+    console.log('✅ [API Interceptor] Token found, adding to request:', config.url);
     config.headers.Authorization = `Bearer ${token}`;
   }
 
@@ -22,7 +27,15 @@ api.interceptors.request.use((config) => {
   const selectedCompanyId = localStorage.getItem('selectedCompanyId');
   if (selectedCompanyId) {
     config.headers['X-Company-Id'] = selectedCompanyId;
+    console.log('✅ [API Interceptor] Company ID added:', selectedCompanyId);
   }
+
+  // Log final headers for debugging
+  console.log('📡 [API Interceptor] Request headers:', {
+    Authorization: config.headers.Authorization ? 'Bearer ***' : 'MISSING',
+    'X-Company-Id': config.headers['X-Company-Id'] || 'NOT SET',
+    'Content-Type': config.headers['Content-Type']
+  });
 
   return config;
 });

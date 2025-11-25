@@ -610,7 +610,8 @@ router.post('/',
   async (req, res) => {
     try {
       console.log('🔵 [POST /templates] Iniciando creación de plantilla');
-      console.log('🔵 User:', req.user?.email, 'Role:', req.user?.role, 'CompanyId:', req.companyId);
+      // DO NOT LOG PII - Use user ID instead of email (GDPR/CCPA compliance)
+      console.log('🔵 User ID:', req.user?.id, 'Role:', req.user?.role, 'CompanyId:', req.companyId);
 
       const errors = validationResult(req);
       if (!errors.isEmpty()) {

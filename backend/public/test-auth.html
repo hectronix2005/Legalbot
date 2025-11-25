@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test Authentication</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; }
+        .success { color: green; }
+        .error { color: red; }
+        pre { background: #f5f5f5; padding: 10px; border-radius: 5px; }
+    </style>
+</head>
+<body>
+    <h1>🔍 Diagnóstico de Autenticación</h1>
+    <div id="results">Cargando...</div>
+
+    <script>
+        const token = localStorage.getItem('token');
+        const companyId = localStorage.getItem('selectedCompanyId');
+
+        const results = document.getElementById('results');
+
+        let html = '<h2>Estado de LocalStorage:</h2>';
+        html += '<p><strong>Token:</strong> ' + (token ? '✅ EXISTE (' + token.substring(0, 30) + '...)' : '<span class="error">❌ NO EXISTE - DEBES INICIAR SESIÓN</span>') + '</p>';
+        html += '<p><strong>Company ID:</strong> ' + (companyId ? '✅ ' + companyId : '<span class="error">❌ NO EXISTE</span>') + '</p>';
+
+        if (!token) {
+            html += '<h2 class="error">⚠️ NO HAY TOKEN - Debes iniciar sesión primero!</h2>';
+            html += '<p><a href="/">Ir a Login</a></p>';
+            results.innerHTML = html;
+        } else {
+            html += '<h2>Test de API:</h2>';
+            html += '<p>Probando endpoint GET /api/field-management/supplier/.../analysis con token...</p>';
+            results.innerHTML = html;
+
+            // Test API call
+            fetch('/api/field-management/supplier/69129b32375817af67e6163e/analysis', {
+                headers: {
+                    'Authorization': 'Bearer ' + token,
+                    'X-Company-Id': companyId || '',
+                    'Content-Type': 'application/json'
+                }
+            })
+            .then(response => {
+                results.innerHTML += '<p><strong>Status:</strong> ' + response.status + ' ' + response.statusText + '</p>';
+                results.innerHTML += '<p>' + (response.ok ? '<span class="success">✅ Token funciona correctamente!</span>' : '<span class="error">❌ Token NO funciona - Status: ' + response.status + '</span>') + '</p>';
+                return response.json();
+            })
+            .then(data => {
+                results.innerHTML += '<h3>Respuesta del servidor:</h3>';
+                results.innerHTML += '<pre>' + JSON.stringify(data, null, 2) + '</pre>';
+
+                // Now test POST
+                results.innerHTML += '<h2>Test de POST (Guardar campo):</h2>';
+                results.innerHTML += '<p>Probando POST /api/field-management/supplier/.../fields...</p>';
+
+                return fetch('/api/field-management/supplier/69129b32375817af67e6163e/fields', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': 'Bearer ' + token,
+                        'X-Company-Id': companyId || '',
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        fields: [
+                            {
+                                name: 'test_field',
+                                value: 'test value',
+                                label: 'Test Field'
+                            }
+                        ]
+                    })
+                });
+            })
+            .then(response => {
+                results.innerHTML += '<p><strong>POST Status:</strong> ' + response.status + ' ' + response.statusText + '</p>';
+                results.innerHTML += '<p>' + (response.ok ? '<span class="success">✅ POST funciona! El problema NO es el token.</span>' : '<span class="error">❌ POST falló - Status: ' + response.status + '</span>') + '</p>';
+                return response.json();
+            })
+            .then(data => {
+                results.innerHTML += '<h3>Respuesta POST:</h3>';
+                results.innerHTML += '<pre>' + JSON.stringify(data, null, 2) + '</pre>';
+            })
+            .catch(error => {
+                results.innerHTML += '<p class="error"><strong>Error:</strong> ' + error.message + '</p>';
+            });
+        }
+    </script>
+</body>
+</html>
