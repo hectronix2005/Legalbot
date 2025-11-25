@@ -1813,15 +1813,15 @@ const UnifiedTemplates: React.FC = () => {
                   <table className="contracts-table">
                     <thead>
                       <tr>
-                        <th>Número de Contrato</th>
-                        <th>Título/Descripción</th>
-                        <th>Plantilla</th>
-                        <th>Tercero Involucrado</th>
-                        <th>Estado</th>
-                        <th className="hide-mobile">Generado por</th>
-                        <th className="hide-tablet">Fecha</th>
-                        <th className="hide-mobile-tablet">Hora</th>
-                        <th>Acciones</th>
+                        <th className="contract-number-col">N° Contrato</th>
+                        <th className="contract-title-col">Título</th>
+                        <th className="contract-template-col hide-mobile">Plantilla</th>
+                        <th className="contract-tercero-col">Tercero</th>
+                        <th className="contract-status-col">Estado</th>
+                        <th className="contract-generator-col hide-tablet">Generado por</th>
+                        <th className="contract-date-col hide-tablet">Fecha</th>
+                        <th className="contract-time-col hide-mobile-tablet">Hora</th>
+                        <th className="contract-actions-col">Acciones</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -1854,7 +1854,7 @@ const UnifiedTemplates: React.FC = () => {
                                 )}
                               </div>
                             </td>
-                            <td className="contract-template">
+                            <td className="contract-template hide-mobile">
                               <span className="item-badge">{contract.template?.name || 'Sin plantilla'}</span>
                             </td>
                             <td className="contract-tercero">
@@ -1880,7 +1880,7 @@ const UnifiedTemplates: React.FC = () => {
                                 {contract.status}
                               </span>
                             </td>
-                            <td className="contract-generator hide-mobile">
+                            <td className="contract-generator hide-tablet">
                               {contract.generated_by?.name || 'Usuario'}
                             </td>
                             <td className="contract-date hide-tablet">

@@ -1141,12 +1141,12 @@ div.unified-templates > div {
 .contracts-view {
   width: 100%;
   max-width: 100%;
-  overflow-x: hidden;
+  overflow-x: auto;
 }
 
 .contracts-table-container {
   width: 100%;
-  overflow-x: hidden;
+  overflow-x: auto;
   margin-top: 0.75rem;
   border-radius: 12px;
   border: 2px solid #e9ecef;
@@ -1156,9 +1156,10 @@ div.unified-templates > div {
 
 .contracts-table {
   width: 100%;
-  min-width: 100%;
-  border-collapse: collapse;
-  font-size: 0.95rem;
+  min-width: 1000px;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: 0.85rem;
   table-layout: fixed;
 }
 
@@ -1168,14 +1169,17 @@ div.unified-templates > div {
 }
 
 .contracts-table thead th {
-  padding: 0.75rem;
+  padding: 0.75rem 0.5rem;
   text-align: left;
   font-weight: 600;
-  font-size: 0.85rem;
+  font-size: 0.75rem;
   text-transform: uppercase;
-  letter-spacing: 0.5px;
+  letter-spacing: 0.3px;
   border-bottom: 2px solid #5568d3;
   white-space: nowrap;
+  vertical-align: middle;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .contracts-table tbody tr {
@@ -1198,74 +1202,129 @@ div.unified-templates > div {
   color: #495057;
 }
 
-/* Columnas específicas de contratos */
-.contract-number {
-  font-weight: 600;
-  color: #495057;
-  width: 15%;
-  max-width: 15%;
+/* Column headers - estilos específicos para contracts-table */
+.contracts-table .contract-number-col {
+  width: 100px;
 }
-
-.contract-title {
-  width: 20%;
-  max-width: 20%;
-  overflow: hidden;
+.contracts-table .contract-title-col {
+  width: 150px;
 }
-
-.contract-template {
-  width: 15%;
-  max-width: 15%;
+.contracts-table .contract-template-col {
+  width: 130px;
+}
+.contracts-table .contract-tercero-col {
+  width: 140px;
+}
+.contracts-table .contract-status-col {
+  width: 80px;
+  text-align: center;
+}
+.contracts-table .contract-generator-col {
+  width: 120px;
+}
+.contracts-table .contract-date-col {
+  width: 95px;
+}
+.contracts-table .contract-time-col {
+  width: 60px;
+}
+.contracts-table .contract-actions-col {
+  width: 70px;
   text-align: center;
 }
 
-.contract-tercero {
-  width: 18%;
-  max-width: 18%;
-  font-weight: 500;
+/* Columnas específicas de contratos - celdas body */
+.contracts-table td.contract-number {
+  font-weight: 600;
   color: #495057;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
-.contract-tercero > div {
+.contracts-table td.contract-title {
   overflow: hidden;
 }
 
-.contract-status {
-  width: 10%;
-  max-width: 10%;
+.contracts-table td.contract-title strong {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.contracts-table td.contract-title > div {
+  overflow: hidden;
+}
+
+.contracts-table td.contract-template {
+  text-align: center;
+  overflow: hidden;
+}
+
+.contracts-table td.contract-template .item-badge {
+  display: inline-block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.7rem;
+  padding: 0.2rem 0.5rem;
+}
+
+.contracts-table td.contract-tercero {
+  font-weight: 500;
+  color: #495057;
+  overflow: hidden;
+}
+
+.contracts-table td.contract-tercero > div {
+  overflow: hidden;
+}
+
+.contracts-table td.contract-status {
   text-align: center;
 }
 
-.contract-generator {
-  width: 12%;
-  max-width: 12%;
-  color: #6c757d;
-  font-size: 0.9rem;
+.contracts-table td.contract-status .item-badge {
+  font-size: 0.7rem;
+  padding: 0.2rem 0.5rem;
 }
 
-.contract-date {
-  width: 8%;
-  max-width: 8%;
-  white-space: nowrap;
+.contracts-table td.contract-generator {
   color: #6c757d;
-  font-size: 0.9rem;
+  font-size: 0.8rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.contract-time {
-  width: 7%;
-  max-width: 7%;
+.contracts-table td.contract-date {
   white-space: nowrap;
   color: #6c757d;
-  font-size: 0.9rem;
+  font-size: 0.8rem;
 }
 
-.contract-actions {
-  text-align: right;
+.contracts-table td.contract-time {
   white-space: nowrap;
-  width: 5%;
-  max-width: 5%;
+  color: #6c757d;
+  font-size: 0.8rem;
+}
+
+.contracts-table td.contract-actions {
+  text-align: center;
+  white-space: nowrap;
   overflow: visible;
+}
+
+.contracts-table td.contract-actions .actions-buttons {
+  justify-content: center;
+}
+
+.contracts-table td.contract-actions .btn-action {
+  width: 28px;
+  height: 28px;
+  min-width: 28px;
+  font-size: 14px;
 }
 
 /* Templates View - Responsive */
@@ -1715,30 +1774,28 @@ div.unified-templates > div {
   }
 
   .contracts-table {
-    font-size: 0.85rem;
+    font-size: 0.8rem;
+    min-width: 800px;
   }
 
   .contracts-table thead th,
   .contracts-table tbody td {
-    padding: 0.6rem 0.4rem;
+    padding: 0.5rem 0.35rem;
   }
 
-  .contract-generator,
-  .contract-time {
+  /* Ocultar columnas en tablet */
+  .contracts-table .hide-tablet,
+  .contracts-table td.contract-generator,
+  .contracts-table td.contract-date {
     display: none;
   }
 
-  .contract-number {
-    width: 20%;
-  }
-
-  .contract-title {
-    width: 25%;
-  }
-
-  .contract-tercero {
-    width: 20%;
-  }
+  .contracts-table .contract-number-col { width: 110px; }
+  .contracts-table .contract-title-col { width: 160px; }
+  .contracts-table .contract-template-col { width: 120px; }
+  .contracts-table .contract-tercero-col { width: 140px; }
+  .contracts-table .contract-status-col { width: 80px; }
+  .contracts-table .contract-actions-col { width: 70px; }
 }
 
 @media (max-width: 768px) {
@@ -1749,31 +1806,37 @@ div.unified-templates > div {
 
   .contracts-table {
     font-size: 0.75rem;
+    min-width: 600px;
   }
 
   .contracts-table thead th,
   .contracts-table tbody td {
-    padding: 0.5rem 0.25rem;
+    padding: 0.4rem 0.25rem;
   }
 
-  .contract-date {
+  .contracts-table thead th {
+    font-size: 0.65rem;
+  }
+
+  /* Ocultar más columnas en móvil */
+  .contracts-table .hide-mobile,
+  .contracts-table .hide-mobile-tablet,
+  .contracts-table td.contract-template,
+  .contracts-table td.contract-time {
     display: none;
   }
 
-  .contract-number {
-    width: 25%;
-  }
+  .contracts-table .contract-number-col { width: 100px; }
+  .contracts-table .contract-title-col { width: 140px; }
+  .contracts-table .contract-tercero-col { width: 120px; }
+  .contracts-table .contract-status-col { width: 70px; }
+  .contracts-table .contract-actions-col { width: 60px; }
 
-  .contract-title {
-    width: 30%;
-  }
-
-  .contract-tercero {
-    width: 25%;
-  }
-
-  .contract-template {
-    width: 20%;
+  .contracts-table td.contract-actions .btn-action {
+    width: 24px;
+    height: 24px;
+    min-width: 24px;
+    font-size: 12px;
   }
 }
 
