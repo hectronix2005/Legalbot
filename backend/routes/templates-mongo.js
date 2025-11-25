@@ -144,7 +144,7 @@ router.post('/upload-word',
       const fileBuffer = fs.readFileSync(req.file.path);
       const result = await extractYellowHighlightedFields(fileBuffer);
 
-      // Upload to MongoDB GridFS for persistent storage (preferred over Cloudinary)
+      // Upload to MongoDB GridFS for persistent storage (REQUIRED - Heroku has ephemeral filesystem)
       let gridfsData = null;
       try {
         gridfsData = await gridfsStorage.uploadFile(req.file.path, req.file.originalname, {
@@ -153,7 +153,15 @@ router.post('/upload-word',
         });
         console.log('📦 Archivo subido a GridFS:', gridfsData?.fileId);
       } catch (gridfsError) {
-        console.warn('⚠️  No se pudo subir a GridFS (continuando con almacenamiento local):', gridfsError.message);
+        console.error('❌ ERROR CRÍTICO: No se pudo subir a GridFS:', gridfsError.message);
+        // Clean up the local file
+        if (fs.existsSync(req.file.path)) {
+          fs.unlinkSync(req.file.path);
+        }
+        return res.status(500).json({
+          error: 'Error al guardar el archivo. Por favor intente de nuevo.',
+          details: gridfsError.message
+        });
       }
 
       res.json({
@@ -343,7 +351,7 @@ router.post('/:id/replace-word',
         }
       }
 
-      // Upload new file to GridFS (preferred)
+      // Upload new file to GridFS (REQUIRED - Heroku has ephemeral filesystem)
       let gridfsData = null;
       try {
         gridfsData = await gridfsStorage.uploadFile(req.file.path, req.file.originalname, {
@@ -353,7 +361,15 @@ router.post('/:id/replace-word',
         });
         console.log('📦 Nuevo archivo subido a GridFS:', gridfsData?.fileId);
       } catch (gridfsError) {
-        console.warn('⚠️  No se pudo subir a GridFS (continuando con almacenamiento local):', gridfsError.message);
+        console.error('❌ ERROR CRÍTICO: No se pudo subir a GridFS:', gridfsError.message);
+        // Clean up the local file
+        if (fs.existsSync(req.file.path)) {
+          fs.unlinkSync(req.file.path);
+        }
+        return res.status(500).json({
+          error: 'Error al guardar el archivo. Por favor intente de nuevo.',
+          details: gridfsError.message
+        });
       }
 
       // Actualizar plantilla con nuevo archivo
@@ -795,6 +811,14 @@ router.post('/',
 
       if (!content && !wordFilePath) {
         return res.status(400).json({ error: 'Debe proporcionar contenido o un archivo Word' });
+      }
+
+      // Validar que si hay archivo Word, debe tener GridFS ID (almacenamiento persistente)
+      if (wordFilePath && !gridfsFileId) {
+        console.error('❌ ERROR: Archivo Word sin GridFS ID - almacenamiento no persistente');
+        return res.status(400).json({
+          error: 'El archivo Word no se guardó correctamente. Por favor, vuelva a subir el archivo.'
+        });
       }
 
       // Verificar permisos para plantillas compartidas
