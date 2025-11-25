@@ -97,12 +97,8 @@ export const CompanyProvider: React.FC<CompanyProviderProps> = ({ children }) =>
           localStorage.setItem('selectedCompanyId', companyToSelect);
           console.log(`✅ CompanyContext: Empresa seleccionada: ${companyToSelect === 'ALL' ? 'TODAS LAS EMPRESAS' : companyToSelect}`);
 
-          // Actualizar URL sin reload
-          if (companyFromUrl !== companyToSelect) {
-            const newUrl = new URL(window.location.href);
-            newUrl.searchParams.set('company', companyToSelect);
-            window.history.replaceState({}, '', newUrl.toString());
-          }
+          // NO modificar la URL aqui - dejamos que la navegacion de React Router maneje las rutas
+          // Solo guardamos en localStorage para persistencia
         }
 
         setIsLoading(false);
@@ -135,12 +131,8 @@ export const CompanyProvider: React.FC<CompanyProviderProps> = ({ children }) =>
     setSelectedCompanyId(companyId);
     localStorage.setItem('selectedCompanyId', companyId);
 
-    // Actualizar URL
-    const newUrl = new URL(window.location.href);
-    newUrl.searchParams.set('company', companyId);
-    window.history.pushState({}, '', newUrl.toString());
-
-    // Opcional: Recargar datos
+    // Recargar la pagina actual para actualizar datos con la nueva empresa
+    // Esto preserva el pathname actual (ej: /unified-templates)
     window.location.reload();
   };
 
