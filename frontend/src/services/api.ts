@@ -72,4 +72,130 @@ api.interceptors.response.use(
   }
 );
 
+// ===================================================================
+// THIRD PARTY PROFILES API
+// ===================================================================
+
+export interface TemplateField {
+  field_name: string;
+  field_label: string;
+  field_type: string;
+  required: boolean;
+  original_marker?: string;
+  supplier_field?: string | null;
+  is_custom_field?: boolean;
+  category?: string;
+  options?: string[];
+  description?: string;
+}
+
+export interface RoleFields {
+  role: string;
+  role_label: string;
+  fields: TemplateField[];
+  total_fields: number;
+  base_fields_count: number;
+  custom_fields_count: number;
+}
+
+export interface TemplateFieldsResponse {
+  success: boolean;
+  template: {
+    _id: string;
+    name: string;
+    category: string;
+    third_party_type?: string;
+  };
+  base_fields: TemplateField[];
+  roles: Record<string, RoleFields>;
+  roles_detected: string[];
+  total_variables: number;
+}
+
+export interface CreateSupplierWithProfileData {
+  template_id: string;
+  role_in_template: string;
+  identification_type: string;
+  identification_number: string;
+  legal_name?: string;
+  legal_name_short?: string;
+  full_name?: string;
+  legal_representative_name?: string;
+  legal_representative_id_type?: string;
+  legal_representative_id_number?: string;
+  email?: string;
+  phone?: string;
+  address?: string;
+  city?: string;
+  country?: string;
+  template_fields?: Record<string, any>;
+}
+
+// Obtener campos requeridos para crear un tercero según una plantilla
+export const getTemplateFields = async (templateId: string): Promise<TemplateFieldsResponse> => {
+  const response = await api.get(`/third-party-profiles/template-fields/${templateId}`);
+  return response.data;
+};
+
+// Crear tercero con perfil de plantilla en una sola operación
+export const createSupplierWithProfile = async (data: CreateSupplierWithProfileData) => {
+  const response = await api.post('/third-party-profiles/create-with-supplier', data);
+  return response.data;
+};
+
+// Obtener plantillas disponibles para un tercero con estado de perfil
+export const getSupplierTemplates = async (supplierId: string) => {
+  const response = await api.get(`/third-party-profiles/supplier-templates/${supplierId}`);
+  return response.data;
+};
+
+// Obtener perfiles de un tercero
+export const getSupplierProfiles = async (supplierId: string) => {
+  const response = await api.get(`/third-party-profiles/by-supplier/${supplierId}`);
+  return response.data;
+};
+
+// Obtener perfiles disponibles para una plantilla
+export const getTemplateProfiles = async (templateId: string, role?: string) => {
+  const params = role ? `?role=${role}` : '';
+  const response = await api.get(`/third-party-profiles/by-template/${templateId}${params}`);
+  return response.data;
+};
+
+// Analizar variables de una plantilla
+export const analyzeTemplateVariables = async (templateId: string) => {
+  const response = await api.post(`/third-party-profiles/analyze-template/${templateId}`);
+  return response.data;
+};
+
+// Auto-llenar perfil desde datos del tercero
+export const autoFillProfile = async (supplierId: string, templateId: string, roleInTemplate: string) => {
+  const response = await api.post('/third-party-profiles/auto-fill', {
+    supplier_id: supplierId,
+    template_id: templateId,
+    role_in_template: roleInTemplate
+  });
+  return response.data;
+};
+
+// Crear o encontrar perfil
+export const findOrCreateProfile = async (supplierId: string, templateId: string, roleInTemplate: string) => {
+  const response = await api.post('/third-party-profiles/find-or-create', {
+    supplier_id: supplierId,
+    template_id: templateId,
+    role_in_template: roleInTemplate
+  });
+  return response.data;
+};
+
+// Actualizar campo de un perfil
+export const updateProfileField = async (profileId: string, templateVariable: string, value: any, sourceField?: string) => {
+  const response = await api.post(`/third-party-profiles/${profileId}/update-field`, {
+    template_variable: templateVariable,
+    value,
+    source_field: sourceField
+  });
+  return response.data;
+};
+
 export default api;

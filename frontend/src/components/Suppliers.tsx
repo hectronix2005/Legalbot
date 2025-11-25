@@ -3,6 +3,7 @@ import api from '../services/api';
 import './Suppliers.css';
 import FieldSuggestionsPanel from './FieldSuggestionsPanel';
 import FieldMerger from './FieldMerger';
+import TemplateBasedSupplierForm from './TemplateBasedSupplierForm';
 
 interface ThirdPartyType {
   _id: string;
@@ -146,6 +147,7 @@ const Suppliers: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
+  const [showTemplateBasedForm, setShowTemplateBasedForm] = useState(false);
   const [editingSupplier, setEditingSupplier] = useState<Supplier | null>(null);
   const [thirdPartyTypes, setThirdPartyTypes] = useState<ThirdPartyType[]>([]);
   const [formData, setFormData] = useState<SupplierFormData>({
@@ -583,12 +585,22 @@ const Suppliers: React.FC = () => {
             <h1>Gestión de Terceros</h1>
             <p>Administra proveedores, clientes y contactos de tu organización</p>
           </div>
-          <button
-            className="btn-create-supplier"
-            onClick={() => setShowCreateModal(true)}
-          >
-            + Nuevo Tercero
-          </button>
+          <div className="header-buttons">
+            <button
+              className="btn-create-supplier btn-template-based"
+              onClick={() => setShowTemplateBasedForm(true)}
+              title="Crear tercero seleccionando primero la plantilla para conocer los campos requeridos"
+            >
+              + Tercero para Plantilla
+            </button>
+            <button
+              className="btn-create-supplier"
+              onClick={() => setShowCreateModal(true)}
+              title="Crear tercero con campos genéricos"
+            >
+              + Tercero Genérico
+            </button>
+          </div>
         </div>
       </div>
 
@@ -1505,6 +1517,23 @@ const Suppliers: React.FC = () => {
                 </ul>
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Modal para crear tercero basado en plantilla */}
+      {showTemplateBasedForm && (
+        <div className="modal-overlay">
+          <div className="modal modal-xlarge">
+            <TemplateBasedSupplierForm
+              onSuccess={async (supplier, profile) => {
+                console.log('✅ Tercero creado:', supplier);
+                console.log('✅ Perfil creado:', profile);
+                await fetchSuppliers();
+                setShowTemplateBasedForm(false);
+              }}
+              onCancel={() => setShowTemplateBasedForm(false)}
+            />
           </div>
         </div>
       )}

@@ -450,6 +450,27 @@
   max-width: 900px;
 }
 
+.modal-xlarge {
+  max-width: 1000px;
+  width: 95%;
+}
+
+/* Header buttons container */
+.header-buttons {
+  display: flex;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.btn-template-based {
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  color: white;
+}
+
+.btn-template-based:hover {
+  background: linear-gradient(135deg, #059669 0%, #047857 100%);
+}
+
 @keyframes modalSlideIn {
   from {
     opacity: 0;

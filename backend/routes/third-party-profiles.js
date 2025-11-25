@@ -993,4 +993,439 @@ router.post('/:profileId/variants/:variantId/record-usage', authenticate, verify
   }
 });
 
+// ===================================================================
+// ENDPOINTS PARA CREAR TERCERO BASADO EN PLANTILLA
+// ===================================================================
+
+/**
+ * GET /api/third-party-profiles/template-fields/:templateId
+ * Obtener los campos necesarios para crear un tercero según una plantilla
+ * Agrupa los campos por rol detectado en las variables
+ */
+router.get('/template-fields/:templateId', authenticate, verifyTenant, async (req, res) => {
+  try {
+    const { templateId } = req.params;
+
+    console.log('📋 [TemplateFields] Getting fields for template:', templateId);
+
+    // Obtener la plantilla
+    const template = await ContractTemplate.findOne({
+      _id: templateId,
+      $or: [
+        { company: req.companyId },
+        { is_shared: true },
+        { shared_with_companies: req.companyId }
+      ]
+    });
+
+    if (!template) {
+      return res.status(404).json({ error: 'Plantilla no encontrada' });
+    }
+
+    // Analizar variables de la plantilla
+    const analysis = await templateVariableAnalyzer.analyzeTemplate(templateId);
+
+    // Campos base siempre requeridos
+    const baseFields = [
+      {
+        field_name: 'identification_type',
+        field_label: 'Tipo de Identificación',
+        field_type: 'select',
+        required: true,
+        options: ['NIT', 'CC', 'CE', 'Pasaporte', 'RUT', 'Otro'],
+        category: 'identification',
+        description: 'Tipo de documento de identificación'
+      },
+      {
+        field_name: 'identification_number',
+        field_label: 'Número de Identificación',
+        field_type: 'text',
+        required: true,
+        category: 'identification',
+        description: 'Número del documento de identificación'
+      }
+    ];
+
+    // Mapeo de sufijos de variables a campos del supplier
+    const variableToSupplierField = {
+      'nombre': 'legal_name',
+      'razon_social': 'legal_name',
+      'razon_social_corta': 'legal_name_short',
+      'nombre_corto': 'legal_name_short',
+      'nit': 'identification_number',
+      'cedula': 'identification_number',
+      'cc': 'identification_number',
+      'identificacion': 'identification_number',
+      'representante': 'legal_representative_name',
+      'representante_legal': 'legal_representative_name',
+      'cedula_representante': 'legal_representative_id_number',
+      'direccion': 'address',
+      'ciudad': 'city',
+      'pais': 'country',
+      'email': 'email',
+      'correo': 'email',
+      'telefono': 'phone',
+      'celular': 'phone'
+    };
+
+    // Procesar cada grupo de roles
+    const roleFieldsMap = {};
+
+    for (const roleGroup of analysis.role_groups) {
+      const roleName = roleGroup.role;
+      const roleFields = [];
+
+      for (const variable of roleGroup.variables) {
+        // Quitar el prefijo del rol para obtener el campo
+        const fieldSuffix = variable.variable
+          .replace(new RegExp(`^${roleName}_`, 'i'), '')
+          .toLowerCase();
+
+        // Determinar si es un campo base del supplier o personalizado
+        const supplierField = variableToSupplierField[fieldSuffix];
+
+        const fieldDef = {
+          field_name: variable.variable,
+          field_label: variable.suggested_label || formatLabel(variable.variable),
+          field_type: variable.suggested_type || 'text',
+          required: variable.required !== false,
+          original_marker: `{{${variable.variable}}}`,
+          supplier_field: supplierField || null,
+          is_custom_field: !supplierField,
+          category: supplierField ? 'supplier_base' : 'template_specific'
+        };
+
+        roleFields.push(fieldDef);
+      }
+
+      roleFieldsMap[roleName] = {
+        role: roleName,
+        role_label: roleGroup.role_label || formatLabel(roleName),
+        fields: roleFields,
+        total_fields: roleFields.length,
+        base_fields_count: roleFields.filter(f => f.supplier_field).length,
+        custom_fields_count: roleFields.filter(f => f.is_custom_field).length
+      };
+    }
+
+    console.log(`✅ [TemplateFields] Found ${Object.keys(roleFieldsMap).length} roles with fields`);
+
+    res.json({
+      success: true,
+      template: {
+        _id: template._id,
+        name: template.name,
+        category: template.category,
+        third_party_type: template.third_party_type
+      },
+      base_fields: baseFields,
+      roles: roleFieldsMap,
+      roles_detected: analysis.roles_detected,
+      total_variables: analysis.total_variables
+    });
+  } catch (error) {
+    console.error('❌ [TemplateFields] Error:', error);
+    res.status(500).json({ error: 'Error al obtener campos de la plantilla' });
+  }
+});
+
+/**
+ * POST /api/third-party-profiles/create-with-supplier
+ * Crear un nuevo tercero Y su perfil de plantilla en una sola operación
+ */
+router.post('/create-with-supplier', authenticate, verifyTenant, authorize('admin', 'super_admin', 'lawyer'), async (req, res) => {
+  try {
+    const {
+      template_id,
+      role_in_template,
+      // Campos base del tercero
+      identification_type,
+      identification_number,
+      legal_name,
+      legal_name_short,
+      full_name,
+      legal_representative_name,
+      legal_representative_id_type,
+      legal_representative_id_number,
+      email,
+      phone,
+      address,
+      city,
+      country,
+      // Campos específicos de la plantilla
+      template_fields
+    } = req.body;
+
+    console.log('📝 [CreateWithSupplier] Creating supplier with template profile:', {
+      template_id,
+      role_in_template,
+      identification_number,
+      company: req.companyId
+    });
+
+    // Validaciones básicas
+    if (!template_id || !role_in_template) {
+      return res.status(400).json({
+        error: 'Se requiere template_id y role_in_template'
+      });
+    }
+
+    if (!identification_type || !identification_number) {
+      return res.status(400).json({
+        error: 'Tipo y número de identificación son requeridos'
+      });
+    }
+
+    // Verificar que la plantilla existe
+    const template = await ContractTemplate.findOne({
+      _id: template_id,
+      $or: [
+        { company: req.companyId },
+        { is_shared: true },
+        { shared_with_companies: req.companyId }
+      ]
+    });
+
+    if (!template) {
+      return res.status(404).json({ error: 'Plantilla no encontrada' });
+    }
+
+    // Verificar si ya existe el tercero
+    let supplier = await Supplier.findOne({
+      identification_number,
+      company: req.companyId
+    });
+
+    let isNewSupplier = false;
+
+    if (!supplier) {
+      // Crear nuevo tercero
+      isNewSupplier = true;
+      const isCompany = identification_type === 'NIT';
+
+      supplier = await Supplier.create({
+        identification_type,
+        identification_number,
+        legal_name: isCompany ? legal_name : (full_name || legal_name),
+        legal_name_short: legal_name_short || null,
+        full_name: !isCompany ? full_name : null,
+        legal_representative_name,
+        legal_representative_id_type,
+        legal_representative_id_number,
+        email,
+        phone,
+        address,
+        city,
+        country,
+        company: req.companyId,
+        created_by: req.user._id,
+        active: true
+      });
+
+      console.log('✅ [CreateWithSupplier] Supplier created:', supplier._id);
+    } else {
+      console.log('ℹ️  [CreateWithSupplier] Using existing supplier:', supplier._id);
+    }
+
+    // Crear o actualizar el perfil de plantilla
+    let profile = await ThirdPartyProfile.findOne({
+      supplier: supplier._id,
+      template: template_id,
+      role_in_template: role_in_template.toLowerCase()
+    });
+
+    // Preparar los mapeos de campos
+    const fieldMappings = [];
+
+    // Mapear campos base del supplier
+    const supplierFieldMappings = {
+      'nombre': supplier.legal_name,
+      'razon_social': supplier.legal_name,
+      'razon_social_corta': supplier.legal_name_short,
+      'nit': supplier.identification_number,
+      'cedula': supplier.identification_number,
+      'identificacion': supplier.identification_number,
+      'representante': supplier.legal_representative_name,
+      'representante_legal': supplier.legal_representative_name,
+      'cedula_representante': supplier.legal_representative_id_number,
+      'direccion': supplier.address,
+      'ciudad': supplier.city,
+      'email': supplier.email,
+      'telefono': supplier.phone
+    };
+
+    // Analizar variables de la plantilla para este rol
+    const analysis = await templateVariableAnalyzer.analyzeTemplate(template_id);
+    const roleGroup = analysis.role_groups.find(g => g.role === role_in_template.toLowerCase());
+
+    if (roleGroup) {
+      for (const variable of roleGroup.variables) {
+        const varName = variable.variable;
+        const fieldSuffix = varName
+          .replace(new RegExp(`^${role_in_template}_`, 'i'), '')
+          .toLowerCase();
+
+        // Buscar valor: primero en template_fields, luego en mapeo automático
+        let value = null;
+        let isAutoFilled = false;
+
+        if (template_fields && template_fields[varName] !== undefined) {
+          value = template_fields[varName];
+        } else if (supplierFieldMappings[fieldSuffix]) {
+          value = supplierFieldMappings[fieldSuffix];
+          isAutoFilled = true;
+        }
+
+        fieldMappings.push({
+          template_variable: `{{${varName}}}`,
+          source_field: fieldSuffix,
+          value: value,
+          is_auto_filled: isAutoFilled,
+          last_updated: new Date()
+        });
+      }
+    }
+
+    if (profile) {
+      // Actualizar perfil existente
+      profile.field_mappings = fieldMappings;
+      profile.updated_by = req.user._id;
+      profile.calculateCompleteness();
+      await profile.save();
+      console.log('✅ [CreateWithSupplier] Profile updated:', profile._id);
+    } else {
+      // Crear nuevo perfil
+      profile = await ThirdPartyProfile.create({
+        supplier: supplier._id,
+        template: template_id,
+        company: req.companyId,
+        role_in_template: role_in_template.toLowerCase(),
+        role_label: formatLabel(role_in_template),
+        field_mappings: fieldMappings,
+        created_by: req.user._id,
+        updated_by: req.user._id
+      });
+
+      profile.calculateCompleteness();
+      await profile.save();
+      console.log('✅ [CreateWithSupplier] Profile created:', profile._id);
+    }
+
+    // Populate para la respuesta
+    await supplier.populate('third_party_type', 'code label');
+    await profile.populate([
+      { path: 'supplier', select: 'legal_name full_name identification_number' },
+      { path: 'template', select: 'name category' }
+    ]);
+
+    res.status(201).json({
+      success: true,
+      message: isNewSupplier
+        ? 'Tercero y perfil creados exitosamente'
+        : 'Perfil actualizado para tercero existente',
+      supplier,
+      profile,
+      is_new_supplier: isNewSupplier,
+      completeness: profile.completeness
+    });
+  } catch (error) {
+    console.error('❌ [CreateWithSupplier] Error:', error);
+    res.status(500).json({ error: 'Error al crear tercero con perfil' });
+  }
+});
+
+/**
+ * GET /api/third-party-profiles/supplier-templates/:supplierId
+ * Obtener todas las plantillas disponibles para un tercero con estado de perfil
+ */
+router.get('/supplier-templates/:supplierId', authenticate, verifyTenant, async (req, res) => {
+  try {
+    const { supplierId } = req.params;
+
+    // Verificar que el tercero existe
+    const supplier = await Supplier.findOne({
+      _id: supplierId,
+      company: req.companyId
+    }).populate('third_party_type', 'code label');
+
+    if (!supplier) {
+      return res.status(404).json({ error: 'Tercero no encontrado' });
+    }
+
+    // Obtener todas las plantillas disponibles para la empresa
+    const templates = await ContractTemplate.find({
+      $or: [
+        { company: req.companyId },
+        { is_shared: true },
+        { shared_with_companies: req.companyId }
+      ],
+      active: true
+    }).select('name category third_party_type fields');
+
+    // Obtener perfiles existentes del tercero
+    const existingProfiles = await ThirdPartyProfile.find({
+      supplier: supplierId,
+      company: req.companyId,
+      active: true
+    }).select('template role_in_template completeness usage_count');
+
+    // Crear mapa de perfiles por plantilla
+    const profileMap = {};
+    for (const profile of existingProfiles) {
+      if (!profileMap[profile.template.toString()]) {
+        profileMap[profile.template.toString()] = [];
+      }
+      profileMap[profile.template.toString()].push(profile);
+    }
+
+    // Construir respuesta con estado de cada plantilla
+    const templateStatus = templates.map(template => {
+      const profiles = profileMap[template._id.toString()] || [];
+
+      return {
+        template: {
+          _id: template._id,
+          name: template.name,
+          category: template.category,
+          third_party_type: template.third_party_type,
+          total_fields: template.fields ? template.fields.length : 0
+        },
+        has_profile: profiles.length > 0,
+        profiles: profiles.map(p => ({
+          _id: p._id,
+          role: p.role_in_template,
+          completeness: p.completeness,
+          usage_count: p.usage_count
+        })),
+        profiles_count: profiles.length
+      };
+    });
+
+    res.json({
+      success: true,
+      supplier: {
+        _id: supplier._id,
+        name: supplier.legal_name || supplier.full_name,
+        identification: supplier.identification_number,
+        type: supplier.third_party_type
+      },
+      templates: templateStatus,
+      total_templates: templates.length,
+      templates_with_profiles: templateStatus.filter(t => t.has_profile).length
+    });
+  } catch (error) {
+    console.error('❌ [SupplierTemplates] Error:', error);
+    res.status(500).json({ error: 'Error al obtener plantillas del tercero' });
+  }
+});
+
+/**
+ * Función auxiliar para formatear etiquetas
+ */
+function formatLabel(text) {
+  return text
+    .replace(/_/g, ' ')
+    .replace(/\b\w/g, l => l.toUpperCase());
+}
+
 module.exports = router;
