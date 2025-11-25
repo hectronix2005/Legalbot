@@ -25,8 +25,9 @@ const Navbar: React.FC = () => {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  const adminPaths = ['/companies', '/user-management', '/company-users', '/third-parties', '/contract-categories', '/supplier-contracts', '/requests-approvals', '/admin'];
+  const adminPaths = ['/companies', '/user-management', '/company-users', '/admin'];
   const isAdminActive = adminPaths.some(path => location.pathname === path);
+  const isTercerosActive = location.pathname === '/terceros';
 
   return (
     <nav className="navbar">
@@ -61,77 +62,50 @@ const Navbar: React.FC = () => {
           📋 Solicitudes
         </Link>
 
-        <RoleGuard allowedRoles={['super_admin', 'admin']}>
+        <RoleGuard allowedRoles={['super_admin', 'admin', 'lawyer']}>
+          <Link
+            to="/terceros"
+            className={isTercerosActive ? 'active' : ''}
+          >
+            👥 Terceros
+          </Link>
+        </RoleGuard>
+
+        <RoleGuard allowedRoles={['super_admin']}>
           <div className="navbar-dropdown" ref={dropdownRef}>
             <button
               className={`navbar-dropdown-button ${isAdminActive ? 'active' : ''}`}
               onClick={() => setAdminDropdownOpen(!adminDropdownOpen)}
             >
-              Administración
+              Administracion
               <span className={`dropdown-arrow ${adminDropdownOpen ? 'open' : ''}`}>▼</span>
             </button>
 
             {adminDropdownOpen && (
               <div className="navbar-dropdown-menu">
-                <RoleGuard allowedRoles={['super_admin']}>
-                  <Link
-                    to="/companies"
-                    className={isActive('/companies') ? 'active' : ''}
-                    onClick={() => setAdminDropdownOpen(false)}
-                  >
-                    Empresas
-                  </Link>
-                </RoleGuard>
+                <Link
+                  to="/companies"
+                  className={isActive('/companies') ? 'active' : ''}
+                  onClick={() => setAdminDropdownOpen(false)}
+                >
+                  Empresas
+                </Link>
 
-                <RoleGuard allowedRoles={['super_admin']}>
-                  <Link
-                    to="/user-management"
-                    className={isActive('/user-management') ? 'active' : ''}
-                    onClick={() => setAdminDropdownOpen(false)}
-                  >
-                    Gestión de Usuarios
-                  </Link>
-                </RoleGuard>
+                <Link
+                  to="/user-management"
+                  className={isActive('/user-management') ? 'active' : ''}
+                  onClick={() => setAdminDropdownOpen(false)}
+                >
+                  Gestion de Usuarios
+                </Link>
 
-                <RoleGuard allowedRoles={['super_admin']}>
-                  <Link
-                    to="/company-users"
-                    className={isActive('/company-users') ? 'active' : ''}
-                    onClick={() => setAdminDropdownOpen(false)}
-                  >
-                    Relaciones Empresa-Usuario
-                  </Link>
-                </RoleGuard>
-
-                <RoleGuard allowedRoles={['super_admin', 'admin']}>
-                  <Link
-                    to="/third-parties"
-                    className={isActive('/third-parties') ? 'active' : ''}
-                    onClick={() => setAdminDropdownOpen(false)}
-                  >
-                    Creación de Terceros
-                  </Link>
-                </RoleGuard>
-
-                <RoleGuard allowedRoles={['super_admin', 'admin']}>
-                  <Link
-                    to="/contract-categories"
-                    className={isActive('/contract-categories') ? 'active' : ''}
-                    onClick={() => setAdminDropdownOpen(false)}
-                  >
-                    Categorías de Contratos
-                  </Link>
-                </RoleGuard>
-
-                <RoleGuard allowedRoles={['super_admin', 'admin', 'lawyer']}>
-                  <Link
-                    to="/supplier-contracts"
-                    className={isActive('/supplier-contracts') ? 'active' : ''}
-                    onClick={() => setAdminDropdownOpen(false)}
-                  >
-                    📋 Contratos por Tercero
-                  </Link>
-                </RoleGuard>
+                <Link
+                  to="/company-users"
+                  className={isActive('/company-users') ? 'active' : ''}
+                  onClick={() => setAdminDropdownOpen(false)}
+                >
+                  Relaciones Empresa-Usuario
+                </Link>
               </div>
             )}
           </div>

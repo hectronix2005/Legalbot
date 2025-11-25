@@ -1,0 +1,145 @@
+/* ============ THIRD PARTIES HUB CONTAINER ============ */
+.third-parties-hub {
+  min-height: calc(100vh - 60px);
+  background: #f5f7fa;
+}
+
+/* ============ HEADER ============ */
+.hub-header {
+  background: linear-gradient(135deg, #1e3a5f 0%, #2c5282 100%);
+  color: white;
+  padding: 1.5rem 2rem;
+}
+
+.hub-header h1 {
+  margin: 0;
+  font-size: 1.75rem;
+  font-weight: 700;
+}
+
+.hub-header p {
+  margin: 0.25rem 0 0 0;
+  opacity: 0.9;
+  font-size: 0.95rem;
+}
+
+/* ============ TABS ============ */
+.hub-tabs {
+  display: flex;
+  background: white;
+  border-bottom: 1px solid #e2e8f0;
+  padding: 0 1rem;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.hub-tab {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 1rem 1.5rem;
+  background: transparent;
+  border: none;
+  border-bottom: 3px solid transparent;
+  color: #64748b;
+  font-size: 0.9rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+
+.hub-tab:hover {
+  color: #1e3a5f;
+  background: #f8fafc;
+}
+
+.hub-tab.active {
+  color: #1e3a5f;
+  border-bottom-color: #1e3a5f;
+  background: #f8fafc;
+}
+
+.hub-tab .tab-icon {
+  font-size: 1.1rem;
+}
+
+.hub-tab .tab-text {
+  font-weight: 500;
+}
+
+/* ============ CONTENT ============ */
+.hub-content {
+  padding: 0;
+}
+
+/* Override child component styles to remove redundant headers */
+.hub-content .third-party-management-container .gradient-header,
+.hub-content .consolidated-container .consolidated-header,
+.hub-content .category-management .page-header h1:first-child {
+  display: none;
+}
+
+/* Ajustar padding de componentes hijos */
+.hub-content .third-party-management-container {
+  padding-top: 0;
+}
+
+.hub-content .third-party-management-container .tabs-header {
+  display: none; /* Ocultar tabs internos ya que tenemos los externos */
+}
+
+.hub-content .consolidated-container {
+  padding-top: 1rem;
+}
+
+.hub-content .category-management {
+  padding: 1.5rem;
+}
+
+.hub-content .category-management .page-header {
+  margin-bottom: 1.5rem;
+}
+
+/* ============ RESPONSIVE ============ */
+@media (max-width: 768px) {
+  .hub-header {
+    padding: 1rem 1.25rem;
+  }
+
+  .hub-header h1 {
+    font-size: 1.5rem;
+  }
+
+  .hub-tabs {
+    padding: 0 0.5rem;
+  }
+
+  .hub-tab {
+    padding: 0.75rem 1rem;
+    flex-direction: column;
+    gap: 0.25rem;
+  }
+
+  .hub-tab .tab-text {
+    font-size: 0.75rem;
+  }
+
+  .hub-content {
+    padding: 0;
+  }
+}
+
+@media (max-width: 480px) {
+  .hub-tab .tab-text {
+    display: none;
+  }
+
+  .hub-tab {
+    padding: 0.75rem 1.25rem;
+  }
+
+  .hub-tab .tab-icon {
+    font-size: 1.25rem;
+  }
+}
