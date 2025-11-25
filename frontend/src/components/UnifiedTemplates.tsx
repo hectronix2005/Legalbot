@@ -97,6 +97,9 @@ const UnifiedTemplates: React.FC = () => {
   const [dynamicFields, setDynamicFields] = useState<any[]>([]);
   const [dynamicFormData, setDynamicFormData] = useState<Record<string, any>>({});
 
+  // Estado para filtrar terceros por tipo en el modal de generacion
+  const [filterThirdPartyType, setFilterThirdPartyType] = useState<string>('');
+
   // Estados para modal de crear nuevo tipo de tercero
   const [showCreateTypeModal, setShowCreateTypeModal] = useState(false);
   const [newTypeData, setNewTypeData] = useState({
@@ -433,6 +436,10 @@ const UnifiedTemplates: React.FC = () => {
     setSelectedTemplateForGenerate(template);
     setShowGenerateModal(true);
 
+    // Resetear selecciones previas
+    setFilterThirdPartyType('');
+    setSelectedSupplier('');
+
     // Inicializar datos del contrato vacíos
     const initialData: Record<string, string> = {};
     template.fields?.forEach((field: any) => {
@@ -450,6 +457,34 @@ const UnifiedTemplates: React.FC = () => {
     } catch (error) {
       console.error('Error fetching suppliers:', error);
     }
+  };
+
+  // Manejar cambio de tipo de tercero para filtrar
+  const handleFilterThirdPartyTypeChange = (typeId: string) => {
+    setFilterThirdPartyType(typeId);
+    setSelectedSupplier(''); // Resetear tercero seleccionado al cambiar tipo
+    // Limpiar datos del contrato relacionados con el tercero
+    setContractData(prev => {
+      const newData = { ...prev };
+      // Mantener solo los campos que no son del tercero
+      return newData;
+    });
+  };
+
+  // Obtener terceros filtrados por tipo
+  const getFilteredSuppliers = () => {
+    return suppliers.filter(s => {
+      // Filtrar por activo
+      if (s.active === false) return false;
+
+      // Si hay un tipo de tercero seleccionado, filtrar por ese tipo
+      if (filterThirdPartyType) {
+        return s.third_party_type_id === filterThirdPartyType;
+      }
+
+      // Si no hay filtro, no mostrar ninguno (debe seleccionar tipo primero)
+      return false;
+    });
   };
 
   // Función para cargar tipos de terceros desde la API
@@ -1953,10 +1988,38 @@ const UnifiedTemplates: React.FC = () => {
             </div>
 
             <div className="modal-body-generate">
-              {/* Selector de Terceros */}
+              {/* PASO 1: Selector de Tipo de Tercero */}
+              <div className="supplier-selector" style={{ marginBottom: '20px' }}>
+                <h3>1. Seleccionar Tipo de Tercero <span className="required">*</span></h3>
+                <p>Primero selecciona el tipo de tercero para filtrar la lista</p>
+                <select
+                  value={filterThirdPartyType}
+                  onChange={(e) => handleFilterThirdPartyTypeChange(e.target.value)}
+                  className="form-input"
+                  style={{
+                    padding: '12px',
+                    fontSize: '15px',
+                    borderRadius: '6px',
+                    border: filterThirdPartyType ? '2px solid #4CAF50' : '2px solid #e0e0e0'
+                  }}
+                >
+                  <option value="">-- Seleccionar tipo de tercero --</option>
+                  {thirdPartyTypes.map(type => (
+                    <option key={type._id} value={type._id}>
+                      {type.icon || '📄'} {type.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* PASO 2: Selector de Terceros (solo visible si se selecciono tipo) */}
               <div className="supplier-selector">
-                <h3>Seleccionar Tercero <span className="required">*</span></h3>
-                <p>Selecciona el tercero con el cual se generará el contrato</p>
+                <h3>2. Seleccionar Tercero <span className="required">*</span></h3>
+                <p>
+                  {filterThirdPartyType
+                    ? `Terceros disponibles del tipo seleccionado: ${getFilteredSuppliers().length}`
+                    : 'Primero selecciona un tipo de tercero arriba'}
+                </p>
                 <div style={{ display: 'flex', gap: '10px', alignItems: 'flex-start' }}>
                   <div style={{ flex: 1 }}>
                     <select
@@ -1964,29 +2027,35 @@ const UnifiedTemplates: React.FC = () => {
                       onChange={(e) => handleSupplierSelect(e.target.value)}
                       className="form-input"
                       required
+                      disabled={!filterThirdPartyType}
+                      style={{
+                        opacity: filterThirdPartyType ? 1 : 0.6,
+                        cursor: filterThirdPartyType ? 'pointer' : 'not-allowed'
+                      }}
                     >
-                      <option value="">-- Seleccionar tercero --</option>
-                      {suppliers
-                        .filter(s => {
-                          // Filtrar por activo
-                          if (s.active === false) return false;
-
-                          // Filtrar por categoría de la plantilla si está disponible
-                          if (selectedTemplateForGenerate?.category && s.third_party_type_id) {
-                            // Comparar el código del tipo de tercero con la categoría de la plantilla
-                            return s.third_party_type_id === selectedTemplateForGenerate.category;
-                          }
-
-                          // Si no hay categoría en la plantilla o tipo en el tercero, mostrar todos
-                          return true;
-                        })
-                        .map(supplier => (
-                          <option key={supplier._id} value={supplier._id}>
-                            {supplier.legal_name} - {supplier.identification_number}
-                          </option>
-                        ))
-                      }
+                      <option value="">
+                        {filterThirdPartyType
+                          ? '-- Seleccionar tercero --'
+                          : '-- Primero selecciona un tipo de tercero --'}
+                      </option>
+                      {getFilteredSuppliers().map(supplier => (
+                        <option key={supplier._id} value={supplier._id}>
+                          {supplier.legal_name} - {supplier.identification_number}
+                        </option>
+                      ))}
                     </select>
+                    {filterThirdPartyType && getFilteredSuppliers().length === 0 && (
+                      <p style={{
+                        color: '#f57c00',
+                        fontSize: '13px',
+                        marginTop: '8px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '6px'
+                      }}>
+                        ⚠️ No hay terceros de este tipo. Crea uno nuevo.
+                      </p>
+                    )}
                   </div>
                   <button
                     type="button"
