@@ -10,6 +10,9 @@
   "scripts": {
     "dev": "nodemon server.js",
     "start": "node server.js",
+    "test": "jest --testPathPattern=tests/ --verbose",
+    "test:vacation": "jest --testPathPattern=vacationAccrual --verbose",
+    "test:coverage": "jest --testPathPattern=tests/ --coverage",
     "init-db": "node scripts/initDatabase.js",
     "init-mongo": "node scripts/initMongoDB.js",
     "backup": "node scripts/backup-database.js",
@@ -40,6 +43,7 @@
     "sqlite3": "^5.1.7"
   },
   "devDependencies": {
+    "jest": "^29.7.0",
     "nodemon": "^3.0.2"
   }
 }

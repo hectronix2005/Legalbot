@@ -390,10 +390,23 @@ router.put('/:typeId/apply-suggested-fields',
         });
       }
 
-      if (thirdPartyType.company && thirdPartyType.company.toString() !== req.companyId?.toString()) {
-        return res.status(403).json({
-          error: 'No tienes permisos para modificar este tipo de tercero'
-        });
+      // Verificar permisos para tipos no genéricos (consistente con PUT /:id)
+      if (req.user.role !== 'super_admin' && !thirdPartyType.isGeneric) {
+        const userCompanyId = req.companyId?.toString();
+
+        // Si el tipo no tiene empresas asignadas (legacy), permitir edición a admins
+        const hasNoCompanies = (!thirdPartyType.companies || thirdPartyType.companies.length === 0) && !thirdPartyType.company;
+
+        // Verificar si el usuario tiene acceso a este tipo
+        const hasAccess = hasNoCompanies ||
+                         thirdPartyType.companies?.some(c => c.toString() === userCompanyId) ||
+                         (thirdPartyType.company && thirdPartyType.company.toString() === userCompanyId);
+
+        if (!hasAccess) {
+          return res.status(403).json({
+            error: 'No tienes permisos para modificar este tipo de tercero'
+          });
+        }
       }
 
       console.log(`📝 Actualizando tipo de tercero: ${thirdPartyType.label}`);

@@ -1,7 +1,7 @@
 import axios from 'axios';
 
-// Usar ruta relativa ya que frontend y backend están en el mismo puerto (3002)
-const API_BASE_URL = process.env.REACT_APP_API_URL || '/api';
+// HARDCODED para desarrollo local - frontend en 3003, backend en 3002
+const API_BASE_URL = 'http://localhost:3002/api';
 
 const api = axios.create({
   baseURL: API_BASE_URL,

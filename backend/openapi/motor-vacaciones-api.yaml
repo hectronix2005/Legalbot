@@ -1,0 +1,791 @@
+openapi: 3.0.3
+info:
+  title: MotorVacaciones API - Sistema de Vacaciones Colombia
+  description: |
+    API para gestión de vacaciones según legislación laboral colombiana (CST Art. 186).
+
+    ## Funcionalidades
+    - Cálculo de causación diaria (base 365 o 360 días)
+    - Soporte para suspensiones y cambio de jornada
+    - Flujo de estados: REQUESTED → APPROVED → SCHEDULED → ENJOYED
+    - Bloqueos automáticos cuando días solicitados > saldo disponible
+    - Trazabilidad completa con logs de auditoría
+
+    ## Fórmula de Causación
+    ```
+    tasaDiaria = diasAnuales / base
+    diasCausados = max(0, floor((diasTrabajados * tasaDiaria), 4))
+    ```
+
+    ## Base Legal
+    - CST Art. 186: 15 días hábiles de vacaciones por año de servicio
+    - Causación desde el primer día de trabajo
+  version: 2.0.0
+  contact:
+    name: LegalBot Support
+    email: soporte@legalbot.co
+
+servers:
+  - url: /api/motor-vacaciones
+    description: API de Motor de Vacaciones
+
+tags:
+  - name: Saldo
+    description: Consulta de saldo y causación
+  - name: Solicitudes
+    description: Gestión de solicitudes de vacaciones
+  - name: Cálculo
+    description: Endpoints de cálculo puro (sin persistencia)
+
+paths:
+  /empleados/{id}/saldo:
+    get:
+      tags: [Saldo]
+      summary: Obtener saldo de vacaciones de un empleado
+      description: |
+        Retorna el saldo completo de vacaciones incluyendo:
+        - Días causados (acumulados)
+        - Días disfrutados
+        - Días aprobados pendientes de disfrutar
+        - Saldo disponible
+        - Solicitudes pendientes
+        - Proyección opcional hasta fin de año
+      operationId: getSaldo
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: ID del empleado
+          schema:
+            type: string
+        - name: fechaCorte
+          in: query
+          description: Fecha hasta la cual calcular (ISO 8601). Default hoy.
+          schema:
+            type: string
+            format: date
+        - name: base
+          in: query
+          description: Base de cálculo (365 estándar, 360 comercial)
+          schema:
+            type: string
+            enum: ['365', '360']
+            default: '365'
+        - name: incluirProyeccion
+          in: query
+          description: Incluir proyección hasta fin de año
+          schema:
+            type: string
+            enum: ['true', 'false']
+            default: 'false'
+      responses:
+        '200':
+          description: Saldo obtenido exitosamente
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SaldoResponse'
+              example:
+                success: true
+                data:
+                  empleadoId: "507f1f77bcf86cd799439011"
+                  fechaContratacion: "2023-01-15"
+                  fechaCorte: "2024-11-25"
+                  base: "365"
+                  causacion:
+                    diasCausados: 27.5342
+                    diasTrabajados: 680
+                    anosServicio: 1.8630
+                    tasaDiaria: 0.04109589
+                  saldo:
+                    causados: 27.5342
+                    disfrutados: 10
+                    aprobadosPendientes: 5
+                    disponible: 12.5342
+                    valido: true
+                  solicitudesPendientes:
+                    - id: "507f1f77bcf86cd799439012"
+                      estado: "approved"
+                      diasSolicitados: 5
+                      fechaInicio: "2024-12-20"
+                      fechaFin: "2024-12-27"
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /vacaciones/solicitud:
+    post:
+      tags: [Solicitudes]
+      summary: Crear solicitud de vacaciones
+      description: |
+        Crea una nueva solicitud de vacaciones.
+
+        **Validaciones:**
+        - Días solicitados debe ser > 0
+        - No puede exceder saldo disponible (BLOQUEO)
+        - Fechas deben ser futuras
+        - No puede solaparse con solicitudes existentes
+      operationId: crearSolicitud
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SolicitudInput'
+            example:
+              empleadoId: "507f1f77bcf86cd799439011"
+              fechaInicio: "2024-12-20"
+              fechaFin: "2024-12-27"
+              diasSolicitados: 5
+              observaciones: "Vacaciones de fin de año"
+      responses:
+        '201':
+          description: Solicitud creada exitosamente
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SolicitudCreatedResponse'
+        '400':
+          description: Error de validación o saldo insuficiente
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                saldoInsuficiente:
+                  summary: Saldo insuficiente
+                  value:
+                    success: false
+                    error: "Días solicitados (10) exceden saldo disponible (5.5). Faltan 4.5 días."
+                    detalle:
+                      diasSolicitados: 10
+                      saldoDisponible: 5.5
+                      faltante: 4.5
+                fechaPasada:
+                  summary: Fecha en el pasado
+                  value:
+                    success: false
+                    error: "La fecha de inicio debe ser futura"
+
+  /vacaciones/{id}/aprobar:
+    post:
+      tags: [Solicitudes]
+      summary: Aprobar solicitud de vacaciones
+      description: |
+        Aprueba una solicitud pendiente. Solo roles admin/talento_humano.
+
+        **Efectos:**
+        - Cambia estado de REQUESTED a APPROVED
+        - Incrementa approvedPendingDays en el balance
+        - Registra log de auditoría
+
+        **Bloqueo:** No aprueba si días > saldo disponible actual
+      operationId: aprobarSolicitud
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: ID de la solicitud
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                observaciones:
+                  type: string
+                  description: Notas del aprobador
+      responses:
+        '200':
+          description: Solicitud aprobada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AprobacionResponse'
+        '400':
+          description: No se puede aprobar (estado inválido o saldo insuficiente)
+
+  /vacaciones/{id}/programar:
+    post:
+      tags: [Solicitudes]
+      summary: Programar fechas definitivas de disfrute
+      description: |
+        Programa las fechas definitivas de disfrute de una solicitud aprobada.
+
+        Transición: APPROVED → SCHEDULED
+      operationId: programarVacaciones
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [fechaInicio, fechaFin]
+              properties:
+                fechaInicio:
+                  type: string
+                  format: date
+                fechaFin:
+                  type: string
+                  format: date
+                observaciones:
+                  type: string
+      responses:
+        '200':
+          description: Vacaciones programadas
+
+  /vacaciones/{id}/registrar-disfrute:
+    post:
+      tags: [Solicitudes]
+      summary: Registrar disfrute y descontar del saldo
+      description: |
+        RRHH cierra la solicitud registrando el disfrute efectivo.
+
+        **Efectos:**
+        - Cambia estado de SCHEDULED a ENJOYED
+        - Incrementa enjoyedDays en el balance
+        - Decrementa approvedPendingDays
+        - availableDays se recalcula automáticamente
+
+        **Disfrute parcial:** Si diasEfectivosDisfrutados < diasAprobados,
+        la diferencia se libera al saldo disponible.
+      operationId: registrarDisfrute
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                diasEfectivosDisfrutados:
+                  type: number
+                  description: Días realmente disfrutados (permite disfrute parcial)
+                observaciones:
+                  type: string
+      responses:
+        '200':
+          description: Disfrute registrado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DisfruteResponse'
+
+  /vacaciones/{id}:
+    get:
+      tags: [Solicitudes]
+      summary: Obtener estado y trazabilidad de solicitud
+      description: |
+        Retorna el detalle completo de una solicitud incluyendo:
+        - Estado actual
+        - Datos de la solicitud
+        - Historial completo de acciones (trazabilidad)
+        - Transiciones de estado disponibles
+      operationId: getSolicitud
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Solicitud encontrada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SolicitudDetalleResponse'
+
+  /vacaciones/{id}/rechazar:
+    post:
+      tags: [Solicitudes]
+      summary: Rechazar solicitud
+      operationId: rechazarSolicitud
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [razon]
+              properties:
+                razon:
+                  type: string
+                  description: Razón del rechazo
+      responses:
+        '200':
+          description: Solicitud rechazada
+
+  /vacaciones/{id}/cancelar:
+    post:
+      tags: [Solicitudes]
+      summary: Cancelar solicitud
+      description: |
+        Cancela una solicitud. Si estaba aprobada/programada,
+        libera los días de approvedPendingDays.
+      operationId: cancelarSolicitud
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                razon:
+                  type: string
+      responses:
+        '200':
+          description: Solicitud cancelada
+
+  /calcular:
+    get:
+      tags: [Cálculo]
+      summary: Calcular causación (sin persistencia)
+      description: |
+        Endpoint de cálculo puro para simulaciones.
+        No requiere empleado en BD, no persiste datos.
+      operationId: calcularCausacion
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: hireDate
+          in: query
+          required: true
+          description: Fecha de contratación (ISO 8601)
+          schema:
+            type: string
+            format: date
+        - name: fechaCorte
+          in: query
+          description: Fecha de corte. Default hoy.
+          schema:
+            type: string
+            format: date
+        - name: base
+          in: query
+          schema:
+            type: string
+            enum: ['365', '360']
+            default: '365'
+        - name: diasAnuales
+          in: query
+          schema:
+            type: number
+            default: 15
+        - name: factorJornada
+          in: query
+          description: Factor de jornada (0.5 = medio tiempo)
+          schema:
+            type: number
+            default: 1.0
+      responses:
+        '200':
+          description: Cálculo realizado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CausacionResult'
+              example:
+                success: true
+                data:
+                  diasCausados: 15.0410
+                  diasTrabajados: 366
+                  diasCalendario: 366
+                  diasSuspension: 0
+                  tasaDiaria: 0.04109589
+                  anosServicio: 1.0027
+                  factorJornada: 1
+                  base: "365"
+                  diasAnuales: 15
+                  fechaContratacion: "2024-01-01"
+                  fechaCorte: "2024-12-31"
+                  valido: true
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    SaldoResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        data:
+          type: object
+          properties:
+            empleadoId:
+              type: string
+            fechaContratacion:
+              type: string
+              format: date
+            fechaCorte:
+              type: string
+              format: date
+            base:
+              type: string
+              enum: ['365', '360']
+            causacion:
+              $ref: '#/components/schemas/CausacionInfo'
+            saldo:
+              $ref: '#/components/schemas/SaldoInfo'
+            solicitudesPendientes:
+              type: array
+              items:
+                $ref: '#/components/schemas/SolicitudResumen'
+            proyeccion:
+              $ref: '#/components/schemas/Proyeccion'
+
+    CausacionInfo:
+      type: object
+      properties:
+        diasCausados:
+          type: number
+          description: Días de vacaciones causados
+        diasTrabajados:
+          type: integer
+          description: Días calendario trabajados
+        anosServicio:
+          type: number
+          description: Años de servicio
+        tasaDiaria:
+          type: number
+          description: Tasa de causación diaria
+
+    SaldoInfo:
+      type: object
+      properties:
+        causados:
+          type: number
+        disfrutados:
+          type: number
+        aprobadosPendientes:
+          type: number
+        disponible:
+          type: number
+        valido:
+          type: boolean
+
+    Proyeccion:
+      type: object
+      properties:
+        fecha:
+          type: string
+          format: date
+        diasCausados:
+          type: number
+        disponibleProyectado:
+          type: number
+        diasAdicionales:
+          type: number
+
+    SolicitudResumen:
+      type: object
+      properties:
+        id:
+          type: string
+        estado:
+          $ref: '#/components/schemas/EstadoSolicitud'
+        diasSolicitados:
+          type: number
+        fechaInicio:
+          type: string
+          format: date
+        fechaFin:
+          type: string
+          format: date
+
+    SolicitudInput:
+      type: object
+      required:
+        - empleadoId
+        - fechaInicio
+        - fechaFin
+        - diasSolicitados
+      properties:
+        empleadoId:
+          type: string
+        fechaInicio:
+          type: string
+          format: date
+        fechaFin:
+          type: string
+          format: date
+        diasSolicitados:
+          type: number
+          minimum: 0.5
+        observaciones:
+          type: string
+
+    SolicitudCreatedResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        message:
+          type: string
+        data:
+          type: object
+          properties:
+            solicitudId:
+              type: string
+            empleadoId:
+              type: string
+            estado:
+              $ref: '#/components/schemas/EstadoSolicitud'
+            diasSolicitados:
+              type: number
+            fechaInicio:
+              type: string
+              format: date
+            fechaFin:
+              type: string
+              format: date
+            saldoDisponible:
+              type: number
+            saldoRestantePostAprobacion:
+              type: number
+
+    AprobacionResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        message:
+          type: string
+        data:
+          type: object
+          properties:
+            solicitudId:
+              type: string
+            estadoAnterior:
+              type: string
+            estadoActual:
+              type: string
+            diasAprobados:
+              type: number
+            fechaAprobacion:
+              type: string
+              format: date-time
+            impactoSaldo:
+              type: object
+              properties:
+                approvedPendingDelta:
+                  type: number
+                nuevoApprovedPending:
+                  type: number
+
+    DisfruteResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        message:
+          type: string
+        data:
+          type: object
+          properties:
+            solicitudId:
+              type: string
+            estadoFinal:
+              type: string
+            diasAprobados:
+              type: number
+            diasDisfrutados:
+              type: number
+            diasNoUsados:
+              type: number
+            nuevoSaldo:
+              type: object
+              properties:
+                disfrutados:
+                  type: number
+                aprobadosPendientes:
+                  type: number
+                disponible:
+                  type: number
+            fechaCierre:
+              type: string
+              format: date-time
+
+    SolicitudDetalleResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        data:
+          type: object
+          properties:
+            solicitud:
+              type: object
+              properties:
+                id:
+                  type: string
+                empleado:
+                  type: object
+                  properties:
+                    id:
+                      type: string
+                    nombre:
+                      type: string
+                    email:
+                      type: string
+                estado:
+                  $ref: '#/components/schemas/EstadoSolicitud'
+                diasSolicitados:
+                  type: number
+                diasDisfrutados:
+                  type: number
+                fechaInicio:
+                  type: string
+                  format: date
+                fechaFin:
+                  type: string
+                  format: date
+            transicionesDisponibles:
+              type: array
+              items:
+                type: string
+            trazabilidad:
+              type: array
+              items:
+                $ref: '#/components/schemas/EventoAuditoria'
+
+    EventoAuditoria:
+      type: object
+      properties:
+        accion:
+          type: string
+        fecha:
+          type: string
+          format: date-time
+        cantidad:
+          type: number
+        descripcion:
+          type: string
+
+    CausacionResult:
+      type: object
+      properties:
+        diasCausados:
+          type: number
+        diasTrabajados:
+          type: integer
+        diasCalendario:
+          type: integer
+        diasSuspension:
+          type: integer
+        tasaDiaria:
+          type: number
+        anosServicio:
+          type: number
+        factorJornada:
+          type: number
+        base:
+          type: string
+        diasAnuales:
+          type: number
+        fechaContratacion:
+          type: string
+          format: date
+        fechaCorte:
+          type: string
+          format: date
+        valido:
+          type: boolean
+        error:
+          type: string
+          nullable: true
+
+    EstadoSolicitud:
+      type: string
+      enum:
+        - requested
+        - approved
+        - scheduled
+        - enjoyed
+        - rejected
+        - cancelled
+      description: |
+        Estados del flujo de vacaciones:
+        - **requested**: Solicitud creada, pendiente de aprobación
+        - **approved**: Aprobada por jefe/RRHH
+        - **scheduled**: Fechas definitivas programadas
+        - **enjoyed**: Vacaciones disfrutadas y cerradas
+        - **rejected**: Solicitud rechazada
+        - **cancelled**: Solicitud cancelada
+
+    ErrorResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: false
+        error:
+          type: string
+        detalle:
+          type: object
+
+  responses:
+    Forbidden:
+      description: Sin permisos para esta operación
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            success: false
+            error: "No tienes permisos para ver este saldo"
+
+    NotFound:
+      description: Recurso no encontrado
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            success: false
+            error: "Solicitud no encontrada"

@@ -18,6 +18,7 @@ const {
   updateKnownGoodCounts
 } = require('./services/dataLossProtection');
 const { initDailyAudit } = require('./jobs/vacationAuditJob');
+const { initDailyAccrualJob } = require('./jobs/vacationAccrualJob');
 
 const app = express();
 const PORT = process.env.PORT || 3002;
@@ -121,6 +122,14 @@ connectDB().then(() => {
     console.error('Error iniciando sistema de auditoría de vacaciones:', error);
   }
 
+  // 8. Sistema de causación diaria automática de vacaciones
+  try {
+    initDailyAccrualJob();
+    console.log('✅ Sistema de causación diaria de vacaciones activado (00:01 diario)');
+  } catch (error) {
+    console.error('Error iniciando sistema de causación de vacaciones:', error);
+  }
+
   console.log('\n🛡️  SISTEMA DE PROTECCIÓN DE DATOS ACTIVADO');
   console.log('   ✓ Backups automáticos cada 6 horas');
   console.log('   ✓ Backups semanales los domingos');
@@ -128,7 +137,8 @@ connectDB().then(() => {
   console.log('   ✓ Monitoreo de integridad cada 15 minutos');
   console.log('   ✓ Soft delete habilitado para terceros');
   console.log('   ✓ Auditoría completa de operaciones');
-  console.log('   ✓ Auditoría automática de vacaciones (2 AM diario)\n');
+  console.log('   ✓ Auditoría automática de vacaciones (2 AM diario)');
+  console.log('   ✓ Causación diaria de vacaciones (00:01 diario)\n');
 
 }).catch(error => {
   console.error('Error conectando a MongoDB:', error);
@@ -206,6 +216,12 @@ const supplierFieldSuggestionsRoutes = require('./routes/supplier-field-suggesti
 const fieldManagementRoutes = require('./routes/field-management');
 const thirdPartyProfilesRoutes = require('./routes/third-party-profiles');
 const vacationRoutes = require('./routes/vacations');
+const vacationRoutesV2 = require('./routes/vacationsV2');
+const motorVacacionesRoutes = require('./routes/motorVacaciones');
+const gestorSolicitudesRoutes = require('./routes/gestorSolicitudes');
+const auditorVacacionesRoutes = require('./routes/auditorVacaciones');
+const qaVacacionesRoutes = require('./routes/qaVacaciones');
+const rolesRoutes = require('./routes/roles');
 
 // Usar rutas
 app.use('/api/auth', authRoutes);
@@ -234,6 +250,12 @@ app.use('/api/supplier-field-suggestions', supplierFieldSuggestionsRoutes);
 app.use('/api/field-management', fieldManagementRoutes);
 app.use('/api/third-party-profiles', thirdPartyProfilesRoutes);
 app.use('/api/vacations', vacationRoutes);
+app.use('/api/vacations-v2', vacationRoutesV2);
+app.use('/api/motor-vacaciones', motorVacacionesRoutes);
+app.use('/api/gestor-solicitudes', gestorSolicitudesRoutes);
+app.use('/api/auditor-vacaciones', auditorVacacionesRoutes);
+app.use('/api/qa-vacaciones', qaVacacionesRoutes);
+app.use('/api/roles', rolesRoutes);
 
 // Ruta raíz - Comentada para permitir que el frontend se sirva en /
 // La información de la API está disponible en /api/health

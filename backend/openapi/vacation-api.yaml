@@ -1,0 +1,761 @@
+openapi: 3.0.3
+info:
+  title: Legalbot Vacation API
+  description: |
+    API para gestión de vacaciones conforme a legislación laboral colombiana.
+
+    ## Características principales
+    - Causación diaria automática (15 días hábiles/año)
+    - Solicitudes, aprobaciones y programación
+    - Auditoría completa sin datos personales (PII)
+    - Validación de saldos en tiempo real
+
+    ## Base legal
+    Código Sustantivo del Trabajo, Artículo 186: 15 días hábiles de vacaciones
+    por cada año de servicios.
+
+    ## Fórmula de causación
+    ```
+    días_causados = días_trabajados × (15 / 365)
+    ```
+    En años bisiestos: `15 / 366`
+  version: 1.0.0
+  contact:
+    name: Legalbot Support
+    email: support@legalbot.co
+  license:
+    name: Proprietary
+
+servers:
+  - url: /api/vacations
+    description: API de Vacaciones
+
+security:
+  - bearerAuth: []
+
+tags:
+  - name: Requests
+    description: Solicitudes de vacaciones
+  - name: Balance
+    description: Consulta de saldos
+  - name: Accrual
+    description: Causación de días
+  - name: Audit
+    description: Auditoría y reportes
+
+paths:
+  /requests:
+    post:
+      tags:
+        - Requests
+      summary: Crear solicitud de vacaciones
+      description: |
+        Crea una nueva solicitud de vacaciones para el empleado autenticado.
+        Valida automáticamente que el saldo disponible sea suficiente.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateVacationRequest'
+            example:
+              requestedDays: 5
+              startDate: "2024-12-01"
+              endDate: "2024-12-05"
+      responses:
+        '201':
+          description: Solicitud creada exitosamente
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VacationRequestResponse'
+        '400':
+          description: Error de validación
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                insufficientBalance:
+                  summary: Saldo insuficiente
+                  value:
+                    error: "Saldo insuficiente. Solicitados: 10 días. Disponibles: 5 días."
+                overlapping:
+                  summary: Fechas solapadas
+                  value:
+                    error: "Ya existe una solicitud activa que se solapa con estas fechas"
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+    get:
+      tags:
+        - Requests
+      summary: Listar solicitudes de vacaciones
+      description: |
+        Lista solicitudes con filtros. Empleados regulares solo ven sus propias solicitudes.
+        Admin y Talento Humano pueden ver todas las solicitudes de la compañía.
+      parameters:
+        - name: employeeId
+          in: query
+          description: Filtrar por ID de empleado
+          schema:
+            type: string
+        - name: status
+          in: query
+          description: Filtrar por estado
+          schema:
+            type: string
+            enum: [requested, approved, scheduled, enjoyed, rejected]
+        - name: startDate
+          in: query
+          description: Fecha de inicio mínima (ISO 8601)
+          schema:
+            type: string
+            format: date
+        - name: endDate
+          in: query
+          description: Fecha de inicio máxima (ISO 8601)
+          schema:
+            type: string
+            format: date
+        - name: limit
+          in: query
+          description: Límite de resultados
+          schema:
+            type: integer
+            default: 50
+            maximum: 100
+        - name: skip
+          in: query
+          description: Offset para paginación
+          schema:
+            type: integer
+            default: 0
+      responses:
+        '200':
+          description: Lista de solicitudes
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VacationRequestList'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /requests/{id}:
+    get:
+      tags:
+        - Requests
+      summary: Obtener detalle de solicitud
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Detalle de solicitud
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VacationRequestResponse'
+        '404':
+          description: Solicitud no encontrada
+
+  /requests/{id}/approve:
+    put:
+      tags:
+        - Requests
+      summary: Aprobar solicitud
+      description: |
+        Aprueba una solicitud pendiente. Solo admin y talento_humano.
+        Actualiza el balance moviendo días a approvedPendingDays.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Solicitud aprobada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VacationRequestResponse'
+        '400':
+          description: No se puede aprobar (estado inválido o saldo insuficiente)
+        '403':
+          description: Sin permisos para aprobar
+
+  /requests/{id}/reject:
+    put:
+      tags:
+        - Requests
+      summary: Rechazar solicitud
+      description: Rechaza una solicitud pendiente. Requiere motivo de rechazo.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - rejectionReason
+              properties:
+                rejectionReason:
+                  type: string
+                  description: Motivo del rechazo
+                  minLength: 10
+            example:
+              rejectionReason: "No hay cobertura disponible para esas fechas"
+      responses:
+        '200':
+          description: Solicitud rechazada
+        '400':
+          description: Error de validación
+
+  /requests/{id}/schedule:
+    put:
+      tags:
+        - Requests
+      summary: Programar fechas de disfrute
+      description: Permite reprogramar las fechas de una solicitud aprobada.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - startDate
+                - endDate
+              properties:
+                startDate:
+                  type: string
+                  format: date
+                endDate:
+                  type: string
+                  format: date
+      responses:
+        '200':
+          description: Vacaciones programadas
+        '400':
+          description: Error de validación
+
+  /enjoy/{id}:
+    post:
+      tags:
+        - Requests
+      summary: Marcar vacaciones como disfrutadas
+      description: |
+        Marca una solicitud como disfrutada y descuenta del saldo.
+        Solo se puede ejecutar después de la fecha de inicio programada.
+
+        **Efecto en balance:**
+        - `approvedPendingDays` -= requestedDays
+        - `enjoyedDays` += requestedDays
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Vacaciones registradas como disfrutadas
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                  data:
+                    type: object
+                    properties:
+                      request:
+                        $ref: '#/components/schemas/VacationRequest'
+                      balance:
+                        $ref: '#/components/schemas/VacationBalance'
+        '400':
+          description: No se puede marcar como disfrutada (estado inválido o fecha futura)
+
+  /balance/{employeeId}:
+    get:
+      tags:
+        - Balance
+      summary: Obtener saldo de vacaciones
+      description: |
+        Retorna el saldo completo de vacaciones de un empleado:
+        - Días acumulados (causación)
+        - Días disfrutados
+        - Días aprobados pendientes
+        - Días disponibles para solicitar
+        - Solicitudes pendientes
+      parameters:
+        - name: employeeId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Balance de vacaciones
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VacationBalanceResponse'
+        '404':
+          description: Balance no encontrado
+        '403':
+          description: Sin permisos para ver este balance
+
+  /initialize/{employeeId}:
+    post:
+      tags:
+        - Balance
+      summary: Inicializar balance de empleado
+      description: |
+        Crea el balance inicial de vacaciones para un nuevo empleado.
+        Calcula automáticamente los días causados desde la fecha de contratación.
+      parameters:
+        - name: employeeId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - hireDate
+              properties:
+                hireDate:
+                  type: string
+                  format: date
+                  description: Fecha de contratación del empleado
+            example:
+              hireDate: "2023-01-15"
+      responses:
+        '201':
+          description: Balance inicializado
+        '400':
+          description: Balance ya existe o fecha inválida
+
+  /accrue:
+    post:
+      tags:
+        - Accrual
+      summary: Ejecutar causación manual
+      description: |
+        Ejecuta la causación diaria de manera manual para la compañía.
+        Útil para correcciones o sincronización.
+      responses:
+        '200':
+          description: Causación ejecutada
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                  data:
+                    type: object
+                    properties:
+                      totalProcessed:
+                        type: integer
+                      totalUpdated:
+                        type: integer
+                      updates:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            employeeId:
+                              type: string
+                            previousAccrued:
+                              type: number
+                            newAccrued:
+                              type: number
+                            increase:
+                              type: number
+
+  /audit:
+    get:
+      tags:
+        - Audit
+      summary: Obtener logs de auditoría
+      description: |
+        Retorna el historial de auditoría de vacaciones.
+        Los logs NO contienen información personal (PII).
+      parameters:
+        - name: employeeId
+          in: query
+          schema:
+            type: string
+        - name: action
+          in: query
+          schema:
+            type: string
+            enum: [request, approve, reject, schedule, enjoy, accrue, cancel, update]
+        - name: startDate
+          in: query
+          schema:
+            type: string
+            format: date
+        - name: endDate
+          in: query
+          schema:
+            type: string
+            format: date
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 100
+      responses:
+        '200':
+          description: Logs de auditoría
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuditLogList'
+
+  /audit/run:
+    get:
+      tags:
+        - Audit
+      summary: Ejecutar auditoría completa
+      description: |
+        Ejecuta una auditoría completa del módulo de vacaciones:
+        - Validación de integridad de saldos
+        - Detección de saldos negativos
+        - Verificación de estados de solicitudes
+        - Consistencia de días aprobados pendientes
+        - Verificación de causación actualizada
+        - Validación de privacidad de logs
+      responses:
+        '200':
+          description: Resultado de auditoría
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuditReport'
+
+  /audit/metrics:
+    get:
+      tags:
+        - Audit
+      summary: Obtener métricas de auditoría
+      parameters:
+        - name: daysBack
+          in: query
+          schema:
+            type: integer
+            default: 30
+      responses:
+        '200':
+          description: Métricas de auditoría
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  totalAudits:
+                    type: integer
+                  passed:
+                    type: integer
+                  failed:
+                    type: integer
+                  warnings:
+                    type: integer
+                  criticalIssues:
+                    type: integer
+                  lastAudit:
+                    type: object
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWT token de autenticación
+
+  responses:
+    Unauthorized:
+      description: No autenticado
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            error: "Token inválido o expirado"
+
+  schemas:
+    CreateVacationRequest:
+      type: object
+      required:
+        - requestedDays
+        - startDate
+        - endDate
+      properties:
+        requestedDays:
+          type: number
+          minimum: 0.5
+          description: Días de vacaciones solicitados
+        startDate:
+          type: string
+          format: date
+          description: Fecha de inicio de vacaciones
+        endDate:
+          type: string
+          format: date
+          description: Fecha de fin de vacaciones
+
+    VacationRequest:
+      type: object
+      properties:
+        _id:
+          type: string
+        employeeId:
+          type: string
+        requestedDays:
+          type: number
+        requestDate:
+          type: string
+          format: date-time
+        startDate:
+          type: string
+          format: date
+        endDate:
+          type: string
+          format: date
+        status:
+          type: string
+          enum: [requested, approved, scheduled, enjoyed, rejected]
+        approverId:
+          type: string
+        approvalDate:
+          type: string
+          format: date-time
+        rejectionReason:
+          type: string
+        enjoyedDate:
+          type: string
+          format: date-time
+        companyId:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    VacationRequestResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        message:
+          type: string
+        data:
+          $ref: '#/components/schemas/VacationRequest'
+
+    VacationRequestList:
+      type: object
+      properties:
+        success:
+          type: boolean
+        data:
+          type: object
+          properties:
+            requests:
+              type: array
+              items:
+                $ref: '#/components/schemas/VacationRequest'
+            total:
+              type: integer
+            limit:
+              type: integer
+            skip:
+              type: integer
+            hasMore:
+              type: boolean
+
+    VacationBalance:
+      type: object
+      properties:
+        _id:
+          type: string
+        employeeId:
+          type: string
+        hireDate:
+          type: string
+          format: date
+        accruedDays:
+          type: number
+          description: Días acumulados (causación)
+        enjoyedDays:
+          type: number
+          description: Días ya disfrutados
+        approvedPendingDays:
+          type: number
+          description: Días aprobados pendientes de disfrutar
+        availableDays:
+          type: number
+          description: Días disponibles para solicitar
+        lastAccrualDate:
+          type: string
+          format: date-time
+          description: Última fecha de actualización de causación
+        companyId:
+          type: string
+
+    VacationBalanceResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        data:
+          type: object
+          properties:
+            balance:
+              $ref: '#/components/schemas/VacationBalance'
+            pendingRequests:
+              type: array
+              items:
+                $ref: '#/components/schemas/VacationRequest'
+            summary:
+              type: object
+              properties:
+                accruedDays:
+                  type: number
+                enjoyedDays:
+                  type: number
+                approvedPendingDays:
+                  type: number
+                availableDays:
+                  type: number
+                pendingRequestsCount:
+                  type: integer
+
+    AuditLogList:
+      type: object
+      properties:
+        success:
+          type: boolean
+        data:
+          type: object
+          properties:
+            logs:
+              type: array
+              items:
+                type: object
+                properties:
+                  _id:
+                    type: string
+                  employeeId:
+                    type: string
+                  action:
+                    type: string
+                  requestId:
+                    type: string
+                  performedBy:
+                    type: string
+                  quantity:
+                    type: number
+                  description:
+                    type: string
+                  timestamp:
+                    type: string
+                    format: date-time
+            total:
+              type: integer
+            filters:
+              type: object
+
+    AuditReport:
+      type: object
+      properties:
+        success:
+          type: boolean
+        data:
+          type: object
+          properties:
+            timestamp:
+              type: string
+              format: date-time
+            companyId:
+              type: string
+            checks:
+              type: array
+              items:
+                type: string
+            errors:
+              type: array
+              items:
+                type: object
+                properties:
+                  type:
+                    type: string
+                  message:
+                    type: string
+                  severity:
+                    type: string
+                    enum: [LOW, MEDIUM, HIGH, CRITICAL]
+            warnings:
+              type: array
+              items:
+                type: object
+            summary:
+              type: object
+              properties:
+                totalChecks:
+                  type: integer
+                totalErrors:
+                  type: integer
+                totalWarnings:
+                  type: integer
+                criticalErrors:
+                  type: integer
+                highErrors:
+                  type: integer
+                employeesAudited:
+                  type: integer
+                requestsAudited:
+                  type: integer
+                executionTimeMs:
+                  type: integer
+
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+          description: Mensaje de error
+        details:
+          type: string
+          description: Detalles adicionales (solo en desarrollo)

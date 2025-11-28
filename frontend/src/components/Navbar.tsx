@@ -25,9 +25,10 @@ const Navbar: React.FC = () => {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  const adminPaths = ['/companies', '/user-management', '/company-users', '/admin'];
+  const adminPaths = ['/companies', '/user-management', '/company-users', '/role-management', '/admin'];
   const isAdminActive = adminPaths.some(path => location.pathname === path);
   const isTercerosActive = location.pathname === '/terceros';
+  const isVacacionesActive = location.pathname === '/vacaciones';
 
   return (
     <nav className="navbar">
@@ -60,6 +61,13 @@ const Navbar: React.FC = () => {
           className={isActive('/requests-approvals') ? 'active' : ''}
         >
           📋 Solicitudes
+        </Link>
+
+        <Link
+          to="/vacaciones"
+          className={isVacacionesActive ? 'active' : ''}
+        >
+          🏖️ Vacaciones
         </Link>
 
         <RoleGuard allowedRoles={['super_admin', 'admin', 'lawyer']}>
@@ -105,6 +113,14 @@ const Navbar: React.FC = () => {
                   onClick={() => setAdminDropdownOpen(false)}
                 >
                   Relaciones Empresa-Usuario
+                </Link>
+
+                <Link
+                  to="/role-management"
+                  className={isActive('/role-management') ? 'active' : ''}
+                  onClick={() => setAdminDropdownOpen(false)}
+                >
+                  Gestion de Roles
                 </Link>
               </div>
             )}

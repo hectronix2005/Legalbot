@@ -11,6 +11,8 @@ import UserManagement from './components/UserManagement';
 import CompanyUserManagement from './components/CompanyUserManagement';
 import ThirdPartiesHub from './components/ThirdPartiesHub';
 import RequestsAndApprovals from './components/RequestsAndApprovals';
+import VacationManagement from './components/VacationManagement';
+import RoleManagement from './components/RoleManagement';
 import Navbar from './components/Navbar';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { CompanyProvider } from './contexts/CompanyContext';
@@ -41,6 +43,8 @@ const AppContent: React.FC = () => {
           <Route path="/company-users" element={<ProtectedRoute><CompanyUserManagement /></ProtectedRoute>} />
           <Route path="/terceros" element={<ProtectedRoute><ThirdPartiesHub /></ProtectedRoute>} />
           <Route path="/requests-approvals" element={<ProtectedRoute><RequestsAndApprovals /></ProtectedRoute>} />
+          <Route path="/vacaciones" element={<ProtectedRoute><VacationManagement /></ProtectedRoute>} />
+          <Route path="/role-management" element={<ProtectedRoute><RoleManagement /></ProtectedRoute>} />
           {/* Redirecciones de rutas antiguas de solicitudes */}
           <Route path="/contract-request" element={<Navigate to="/requests-approvals" replace />} />
           <Route path="/my-requests" element={<Navigate to="/requests-approvals" replace />} />
