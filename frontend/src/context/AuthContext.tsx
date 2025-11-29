@@ -71,26 +71,28 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const isAuthenticated = !!user;
 
   useEffect(() => {
-    // Este efecto solo maneja la configuracion de selectedCompanyId
+    // Este efecto solo maneja la configuracion de selectedCompanyId cuando no existe
     if (user) {
       const selectedCompanyId = localStorage.getItem('selectedCompanyId');
 
-      // SIEMPRE establecer 'ALL' para super_admin (forzar correccion de sesiones antiguas)
+      // Si ya hay una selección guardada, respetarla (persistencia de selección)
+      if (selectedCompanyId) {
+        console.log('✅ Usando empresa guardada en localStorage:', selectedCompanyId);
+        return;
+      }
+
+      // Solo establecer valor inicial si no existe selectedCompanyId
       if (user.role === 'super_admin') {
-        if (selectedCompanyId !== 'ALL') {
-          localStorage.setItem('selectedCompanyId', 'ALL');
-          console.log('✅ Super admin: Forzando selectedCompanyId a ALL (corrigiendo sesion antigua)');
-        }
-      } else if (!selectedCompanyId) {
-        // Para otros roles, solo establecer si no existe
-        if (user.companyRoles && Object.keys(user.companyRoles).length > 0) {
-          const firstCompanyId = Object.keys(user.companyRoles)[0];
-          localStorage.setItem('selectedCompanyId', firstCompanyId);
-          console.log('✅ Company ID establecido al cargar:', firstCompanyId);
-        } else if (user.company_id) {
-          localStorage.setItem('selectedCompanyId', user.company_id);
-          console.log('✅ Company ID (legacy) establecido al cargar:', user.company_id);
-        }
+        // Super admin: por defecto 'ALL', pero respetamos si ya eligió una empresa específica
+        localStorage.setItem('selectedCompanyId', 'ALL');
+        console.log('✅ Super admin: Estableciendo selectedCompanyId inicial a ALL');
+      } else if (user.companyRoles && Object.keys(user.companyRoles).length > 0) {
+        const firstCompanyId = Object.keys(user.companyRoles)[0];
+        localStorage.setItem('selectedCompanyId', firstCompanyId);
+        console.log('✅ Company ID establecido al cargar:', firstCompanyId);
+      } else if (user.company_id) {
+        localStorage.setItem('selectedCompanyId', user.company_id);
+        console.log('✅ Company ID (legacy) establecido al cargar:', user.company_id);
       }
     }
   }, [user]);

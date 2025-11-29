@@ -17,8 +17,8 @@ const fieldConfigSchema = new mongoose.Schema({
   field_type: {
     type: String,
     required: true,
-    enum: ['text', 'number', 'date', 'email', 'phone', 'textarea', 'select', 'checkbox'],
-    description: 'Tipo de campo HTML'
+    enum: ['text', 'number', 'date', 'email', 'phone', 'textarea', 'select', 'checkbox', 'user_select'],
+    description: 'Tipo de campo HTML (user_select para seleccionar usuarios del sistema)'
   },
   options: {
     type: [String],

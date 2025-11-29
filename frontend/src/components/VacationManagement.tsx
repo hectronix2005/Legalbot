@@ -93,6 +93,18 @@ interface User {
   role: string;
 }
 
+interface EmployeeTercero {
+  _id: string;
+  legal_name?: string;
+  full_name?: string;
+  identification_number?: string;
+  email?: string;
+  company?: {
+    _id: string;
+    name: string;
+  };
+}
+
 type TabType = 'my-balance' | 'my-requests' | 'new-request' | 'leader-approvals' | 'hr-approvals' | 'employees' | 'historical';
 
 const VacationManagement: React.FC = () => {
@@ -835,7 +847,8 @@ const EmployeesTab: React.FC = () => {
   const [employees, setEmployees] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [showInitForm, setShowInitForm] = useState(false);
-  const [users, setUsers] = useState<User[]>([]);
+  const [employeeTerceros, setEmployeeTerceros] = useState<EmployeeTercero[]>([]);
+  const [users, setUsers] = useState<User[]>([]); // For leader selection
   const [formData, setFormData] = useState({
     employeeId: '',
     hireDate: '',
@@ -846,11 +859,84 @@ const EmployeesTab: React.FC = () => {
   });
   const [formLoading, setFormLoading] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
+  const [employeeDataLoading, setEmployeeDataLoading] = useState(false);
+  const [employeeDataSource, setEmployeeDataSource] = useState<string | null>(null);
+  const [leaderNameFromTercero, setLeaderNameFromTercero] = useState<string | null>(null);
+
+  // Estado para modal de edicion
+  const [showEditForm, setShowEditForm] = useState(false);
+  const [editData, setEditData] = useState({
+    employeeId: '',
+    employeeName: '',
+    leaderId: '',
+    position: '',
+    department: ''
+  });
+  const [editLoading, setEditLoading] = useState(false);
+  const [editError, setEditError] = useState<string | null>(null);
 
   useEffect(() => {
     fetchEmployees();
-    fetchUsers();
+    fetchEmployeeTerceros();
+    fetchUsers(); // Keep for leader selection
   }, []);
+
+  // Obtener datos del empleado desde el tercero tipo "empleado"
+  const fetchEmployeeData = async (employeeId: string) => {
+    if (!employeeId) {
+      setEmployeeDataSource(null);
+      return;
+    }
+
+    try {
+      setEmployeeDataLoading(true);
+      // Primero intentar obtener datos desde el tercero
+      const response = await api.get(`/vacations-v2/employee-data/${employeeId}`);
+      if (response.data.success && response.data.data.found) {
+        const data = response.data.data;
+        setFormData(prev => ({
+          ...prev,
+          hireDate: data.hireDate || prev.hireDate,
+          position: data.position || prev.position,
+          department: data.department || prev.department,
+          leaderId: data.leaderId || prev.leaderId
+        }));
+        setEmployeeDataSource('Tercero tipo Empleado');
+        // Guardar el nombre del líder que viene del tercero
+        if (data.leaderName) {
+          setLeaderNameFromTercero(data.leaderName);
+        }
+      } else {
+        // Si no hay tercero, intentar desde contrato de trabajo
+        try {
+          const contractResponse = await api.get(`/vacations-v2/employee-hire-date/${employeeId}`);
+          if (contractResponse.data.success && contractResponse.data.data.found) {
+            setFormData(prev => ({ ...prev, hireDate: contractResponse.data.data.hireDate }));
+            setEmployeeDataSource(contractResponse.data.data.contractInfo?.title || 'Contrato de trabajo');
+          } else {
+            setEmployeeDataSource(null);
+          }
+        } catch (err) {
+          setEmployeeDataSource(null);
+        }
+      }
+    } catch (err) {
+      console.error('Error fetching employee data:', err);
+      setEmployeeDataSource(null);
+    } finally {
+      setEmployeeDataLoading(false);
+    }
+  };
+
+  // Manejar cambio de empleado seleccionado
+  const handleEmployeeChange = (employeeId: string) => {
+    setFormData({ ...formData, employeeId, hireDate: '', position: '', department: '', leaderId: '' });
+    setEmployeeDataSource(null);
+    setLeaderNameFromTercero(null);
+    if (employeeId) {
+      fetchEmployeeData(employeeId);
+    }
+  };
 
   const fetchEmployees = async () => {
     try {
@@ -873,10 +959,50 @@ const EmployeesTab: React.FC = () => {
     }
   };
 
+  // Fetch empleados (terceros tipo empleado) - respeta el filtro de compañía activa
+  const fetchEmployeeTerceros = async () => {
+    try {
+      const response = await api.get('/suppliers?type=empleado');
+      // API returns { success, count, suppliers } structure
+      setEmployeeTerceros(response.data?.suppliers || []);
+    } catch (err) {
+      console.error('Error fetching employee terceros:', err);
+      setEmployeeTerceros([]);
+    }
+  };
+
   const handleInitialize = async (e: React.FormEvent) => {
     e.preventDefault();
     setFormLoading(true);
     setFormError(null);
+
+    // Validación adicional en el frontend
+    if (!formData.employeeId) {
+      setFormError('Debe seleccionar un empleado');
+      setFormLoading(false);
+      return;
+    }
+
+    if (!formData.hireDate) {
+      setFormError('La fecha de contratación es requerida. Por favor ingrese la fecha manualmente o verifique que el empleado tenga esta información en su ficha de tercero.');
+      setFormLoading(false);
+      return;
+    }
+
+    // Validar que la fecha sea válida
+    const hireDateObj = new Date(formData.hireDate);
+    if (isNaN(hireDateObj.getTime())) {
+      setFormError('La fecha de contratación no es válida. Formato esperado: YYYY-MM-DD');
+      setFormLoading(false);
+      return;
+    }
+
+    // Validar que la fecha no sea futura
+    if (hireDateObj > new Date()) {
+      setFormError('La fecha de contratación no puede ser una fecha futura');
+      setFormLoading(false);
+      return;
+    }
 
     try {
       await api.post('/vacations-v2/balance/initialize', {
@@ -895,6 +1021,42 @@ const EmployeesTab: React.FC = () => {
       setFormError(err.response?.data?.error || 'Error inicializando balance');
     } finally {
       setFormLoading(false);
+    }
+  };
+
+  // Abrir modal de edicion con datos del empleado
+  const handleEdit = (emp: any) => {
+    setEditData({
+      employeeId: emp.employeeId?._id || emp.employeeId,
+      employeeName: emp.employeeId?.name || 'N/A',
+      leaderId: emp.leaderId?._id || '',
+      position: emp.position || '',
+      department: emp.department || ''
+    });
+    setEditError(null);
+    setShowEditForm(true);
+  };
+
+  // Guardar cambios del empleado
+  const handleUpdateEmployee = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setEditLoading(true);
+    setEditError(null);
+
+    try {
+      await api.put(`/vacations-v2/balance/${editData.employeeId}`, {
+        leaderId: editData.leaderId || undefined,
+        position: editData.position || undefined,
+        department: editData.department || undefined
+      });
+
+      setShowEditForm(false);
+      setEditData({ employeeId: '', employeeName: '', leaderId: '', position: '', department: '' });
+      fetchEmployees();
+    } catch (err: any) {
+      setEditError(err.response?.data?.error || 'Error actualizando empleado');
+    } finally {
+      setEditLoading(false);
     }
   };
 
@@ -922,6 +1084,7 @@ const EmployeesTab: React.FC = () => {
               <th>Causados</th>
               <th>Disfrutados</th>
               <th>Disponibles</th>
+              <th>Acciones</th>
             </tr>
           </thead>
           <tbody>
@@ -943,6 +1106,11 @@ const EmployeesTab: React.FC = () => {
                   )}
                 </td>
                 <td><strong>{emp.availableDays?.toFixed(2) || '0'}</strong></td>
+                <td>
+                  <button className="btn-small" onClick={() => handleEdit(emp)}>
+                    Editar
+                  </button>
+                </td>
               </tr>
             ))}
           </tbody>
@@ -958,39 +1126,63 @@ const EmployeesTab: React.FC = () => {
             <form onSubmit={handleInitialize}>
               <div className="form-row">
                 <div className="form-group">
-                  <label>Empleado *</label>
+                  <label>Empleado * <small style={{ color: '#666', fontWeight: 'normal' }}>(Terceros tipo Empleado de la empresa activa)</small></label>
                   <select
                     value={formData.employeeId}
-                    onChange={(e) => setFormData({ ...formData, employeeId: e.target.value })}
+                    onChange={(e) => handleEmployeeChange(e.target.value)}
                     required
                   >
                     <option value="">Seleccionar...</option>
-                    {users.map((u) => (
-                      <option key={u._id} value={u._id}>{u.name} ({u.email})</option>
+                    {employeeTerceros.map((emp) => (
+                      <option key={emp._id} value={emp._id}>
+                        {emp.legal_name || emp.full_name} {emp.identification_number ? `(${emp.identification_number})` : ''}
+                      </option>
                     ))}
                   </select>
+                  {employeeTerceros.length === 0 && (
+                    <small style={{ color: '#dc3545', display: 'block', marginTop: '4px' }}>
+                      No hay empleados registrados como terceros en esta empresa. Debe crear primero el tercero tipo "Empleado".
+                    </small>
+                  )}
                 </div>
                 <div className="form-group">
-                  <label>Fecha de Contratación *</label>
+                  <label>
+                    Fecha de Contratación *
+                    {employeeDataLoading && <span style={{ marginLeft: '8px', color: '#666' }}>(Buscando...)</span>}
+                    {employeeDataSource && !employeeDataLoading && (
+                      <span style={{ marginLeft: '8px', color: '#28a745', fontSize: '0.85em' }}>
+                        ✓ Datos de: {employeeDataSource}
+                      </span>
+                    )}
+                  </label>
                   <input
                     type="date"
                     value={formData.hireDate}
                     onChange={(e) => setFormData({ ...formData, hireDate: e.target.value })}
                     required
+                    disabled={employeeDataLoading}
                   />
                 </div>
               </div>
 
               <div className="form-row">
                 <div className="form-group">
-                  <label>Líder/Jefe Inmediato</label>
+                  <label>
+                    Líder/Jefe Inmediato
+                    {leaderNameFromTercero && !employeeDataLoading && (
+                      <span style={{ marginLeft: '8px', color: '#28a745', fontSize: '0.85em' }}>
+                        ✓ Del tercero: {leaderNameFromTercero}
+                      </span>
+                    )}
+                  </label>
                   <select
                     value={formData.leaderId}
                     onChange={(e) => setFormData({ ...formData, leaderId: e.target.value })}
+                    disabled={employeeDataLoading}
                   >
                     <option value="">Seleccionar...</option>
-                    {users.filter(u => ['admin', 'talento_humano'].includes(u.role)).map((u) => (
-                      <option key={u._id} value={u._id}>{u.name}</option>
+                    {users.map((u) => (
+                      <option key={u._id} value={u._id}>{u.name} ({u.role})</option>
                     ))}
                   </select>
                 </div>
@@ -1035,6 +1227,59 @@ const EmployeesTab: React.FC = () => {
                 </button>
                 <button type="submit" className="btn-primary" disabled={formLoading}>
                   {formLoading ? 'Guardando...' : 'Inicializar Balance'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {showEditForm && (
+        <div className="modal-overlay">
+          <div className="modal">
+            <h3>Editar Empleado: {editData.employeeName}</h3>
+            {editError && <div className="error-message">{editError}</div>}
+
+            <form onSubmit={handleUpdateEmployee}>
+              <div className="form-group">
+                <label>Líder/Jefe Inmediato</label>
+                <select
+                  value={editData.leaderId}
+                  onChange={(e) => setEditData({ ...editData, leaderId: e.target.value })}
+                >
+                  <option value="">Seleccionar...</option>
+                  {users.map((u) => (
+                    <option key={u._id} value={u._id}>{u.name} ({u.role})</option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="form-group">
+                <label>Cargo</label>
+                <input
+                  type="text"
+                  value={editData.position}
+                  onChange={(e) => setEditData({ ...editData, position: e.target.value })}
+                  placeholder="Ej: Desarrollador Senior"
+                />
+              </div>
+
+              <div className="form-group">
+                <label>Departamento</label>
+                <input
+                  type="text"
+                  value={editData.department}
+                  onChange={(e) => setEditData({ ...editData, department: e.target.value })}
+                  placeholder="Ej: Tecnología"
+                />
+              </div>
+
+              <div className="modal-actions">
+                <button type="button" className="btn-secondary" onClick={() => setShowEditForm(false)}>
+                  Cancelar
+                </button>
+                <button type="submit" className="btn-primary" disabled={editLoading}>
+                  {editLoading ? 'Guardando...' : 'Guardar Cambios'}
                 </button>
               </div>
             </form>

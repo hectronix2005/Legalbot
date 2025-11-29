@@ -154,6 +154,186 @@ class VacationServiceV2 {
     }
   }
 
+  /**
+   * Actualiza la fecha de contratación de un empleado
+   * Recalcula días causados y propaga el cambio al tercero (Supplier)
+   *
+   * @param {string} employeeId - ID del empleado
+   * @param {Date|string} newHireDate - Nueva fecha de contratación
+   * @param {string} reason - Razón del cambio (obligatoria)
+   * @param {string} companyId - ID de la empresa
+   * @param {string} performedBy - ID del usuario que realiza el cambio
+   * @param {Object} options - Opciones adicionales
+   * @param {boolean} options.syncToSupplier - Si debe sincronizar al tercero (default: true)
+   * @returns {Object} Balance actualizado con detalles del cambio
+   */
+  async updateHireDate(employeeId, newHireDate, reason, companyId, performedBy, options = {}) {
+    try {
+      const { syncToSupplier = true } = options;
+
+      if (!reason || reason.trim().length === 0) {
+        throw new Error('Debe proporcionar una razón para el cambio de fecha de contratación');
+      }
+
+      const balance = await VacationBalance.findOne({ employeeId, companyId });
+      if (!balance) {
+        throw new Error('Balance de vacaciones no encontrado para este empleado');
+      }
+
+      const newDate = new Date(newHireDate);
+      if (isNaN(newDate.getTime())) {
+        throw new Error('Fecha de contratación inválida');
+      }
+
+      if (newDate > new Date()) {
+        throw new Error('La fecha de contratación no puede ser futura');
+      }
+
+      const previousHireDate = balance.hireDate;
+      const previousAccruedDays = balance.accruedDays;
+
+      // Preparar períodos de suspensión para cálculo
+      const periodosSinCausar = (balance.suspensionPeriods || []).map(p => ({
+        inicio: p.startDate,
+        fin: p.endDate
+      }));
+
+      // Recalcular días causados con nueva fecha
+      const causacion = calcularCausacion(newDate, new Date(), {
+        base: balance.calculationBase,
+        factorJornada: balance.workTimeFactor,
+        periodosSinCausar
+      });
+
+      if (!causacion.valido) {
+        throw new Error(`Error en cálculo de causación: ${causacion.error}`);
+      }
+
+      // Registrar en historial de cambios de fecha
+      if (!balance.hireDateChangeHistory) {
+        balance.hireDateChangeHistory = [];
+      }
+
+      balance.hireDateChangeHistory.push({
+        previousDate: previousHireDate,
+        newDate: newDate,
+        changeDate: new Date(),
+        previousAccruedDays: previousAccruedDays,
+        newAccruedDays: causacion.diasCausados,
+        adjustmentDays: causacion.diasCausados - previousAccruedDays,
+        reason,
+        performedBy
+      });
+
+      // Actualizar balance
+      balance.hireDate = newDate;
+      balance.accruedDays = causacion.diasCausados;
+      balance.lastAccrualDate = new Date();
+
+      await balance.save();
+
+      // Sincronizar al tercero (Supplier) si está habilitado
+      let supplierUpdated = false;
+      if (syncToSupplier) {
+        try {
+          const Supplier = require('../models/Supplier');
+          const mongoose = require('mongoose');
+
+          // Buscar el tercero por ID o por relación
+          let supplier = null;
+          if (mongoose.Types.ObjectId.isValid(employeeId)) {
+            supplier = await Supplier.findById(employeeId);
+          }
+
+          if (!supplier) {
+            // Intentar buscar por email o nombre
+            const userData = await User.findById(employeeId).select('email name');
+            if (userData) {
+              supplier = await Supplier.findOne({
+                $or: [
+                  { email: userData.email },
+                  { legal_name: userData.name },
+                  { full_name: userData.name }
+                ],
+                active: true,
+                deleted: { $ne: true }
+              });
+            }
+          }
+
+          if (supplier) {
+            // Actualizar custom_fields con la nueva fecha
+            const hireDateFields = ['fecha_contratacion', 'fecha_de_iniciacion_de_labores', 'fecha_ingreso', 'hire_date'];
+            const customFields = supplier.custom_fields instanceof Map
+              ? supplier.custom_fields
+              : new Map(Object.entries(supplier.custom_fields || {}));
+
+            // Actualizar todos los campos de fecha de contratación encontrados
+            let fieldUpdated = false;
+            for (const field of hireDateFields) {
+              if (customFields.has(field)) {
+                customFields.set(field, newDate.toISOString().split('T')[0]);
+                fieldUpdated = true;
+              }
+            }
+
+            // Si no había ningún campo, crear el principal
+            if (!fieldUpdated) {
+              customFields.set('fecha_contratacion', newDate.toISOString().split('T')[0]);
+            }
+
+            supplier.custom_fields = customFields;
+            await supplier.save();
+            supplierUpdated = true;
+          }
+        } catch (supplierError) {
+          console.warn('Advertencia: No se pudo sincronizar fecha al tercero:', supplierError.message);
+          // No fallar la operación principal si falla la sincronización
+        }
+      }
+
+      // Audit log detallado
+      await VacationAuditLog.createLog({
+        employeeId,
+        action: 'update',
+        performedBy,
+        description: `Fecha de contratación actualizada: ${previousHireDate.toISOString().split('T')[0]} → ${newDate.toISOString().split('T')[0]}. Razón: ${reason}`,
+        previousState: {
+          hireDate: previousHireDate,
+          accruedDays: previousAccruedDays
+        },
+        newState: {
+          hireDate: newDate,
+          accruedDays: causacion.diasCausados,
+          adjustmentDays: causacion.diasCausados - previousAccruedDays
+        },
+        metadata: {
+          reason,
+          supplierSynced: supplierUpdated,
+          yearsOfService: causacion.anosServicio,
+          diasTrabajados: causacion.diasTrabajados
+        },
+        companyId
+      });
+
+      return {
+        balance,
+        change: {
+          previousHireDate: previousHireDate.toISOString().split('T')[0],
+          newHireDate: newDate.toISOString().split('T')[0],
+          previousAccruedDays: Math.round(previousAccruedDays * 10000) / 10000,
+          newAccruedDays: Math.round(causacion.diasCausados * 10000) / 10000,
+          adjustmentDays: Math.round((causacion.diasCausados - previousAccruedDays) * 10000) / 10000,
+          yearsOfService: causacion.anosServicio,
+          supplierSynced: supplierUpdated
+        },
+        causacion
+      };
+    } catch (error) {
+      throw new Error(`Error actualizando fecha de contratación: ${error.message}`);
+    }
+  }
+
   // ============================================================================
   // REGISTRO DE VACACIONES HISTÓRICAS
   // ============================================================================
@@ -787,11 +967,38 @@ class VacationServiceV2 {
         .populate('leaderId', 'name email')
         .sort({ department: 1, 'employeeId.name': 1 });
 
-      // Agregar resumen a cada balance
-      const balancesWithSummary = balances.map(b => ({
-        ...b.toObject(),
-        summary: b.getSummary(),
-        yearsOfService: b.getYearsOfService()
+      // Importar Supplier para buscar nombres de terceros empleados
+      const Supplier = require('../models/Supplier');
+
+      // Agregar resumen a cada balance y resolver nombre desde Supplier si es necesario
+      const balancesWithSummary = await Promise.all(balances.map(async (b) => {
+        const balanceObj = b.toObject();
+
+        // Si employeeId no tiene name (no es User, es Supplier/Tercero), buscar en Supplier
+        if (!balanceObj.employeeId?.name && balanceObj.employeeId) {
+          const employeeIdVal = balanceObj.employeeId._id || balanceObj.employeeId;
+          try {
+            const supplier = await Supplier.findById(employeeIdVal)
+              .select('legal_name full_name identification_number email')
+              .lean();
+            if (supplier) {
+              balanceObj.employeeId = {
+                _id: employeeIdVal,
+                name: supplier.legal_name || supplier.full_name || 'Sin nombre',
+                email: supplier.email || '',
+                identification_number: supplier.identification_number
+              };
+            }
+          } catch (err) {
+            console.log('Error buscando Supplier para employeeId:', employeeIdVal, err.message);
+          }
+        }
+
+        return {
+          ...balanceObj,
+          summary: b.getSummary(),
+          yearsOfService: b.getYearsOfService()
+        };
       }));
 
       return balancesWithSummary;

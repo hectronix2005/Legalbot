@@ -255,7 +255,11 @@ const RoleManagement: React.FC = () => {
     if (!selectedRole) return;
 
     try {
-      await api.put(`/roles/${selectedRole._id}`, formData);
+      // Super Admin puede editar roles del sistema con force=true
+      const endpoint = selectedRole.isSystemRole
+        ? `/roles/${selectedRole._id}?force=true`
+        : `/roles/${selectedRole._id}`;
+      await api.put(endpoint, formData);
       await fetchRoles();
       setShowEditModal(false);
       setSelectedRole(null);
@@ -268,17 +272,20 @@ const RoleManagement: React.FC = () => {
   };
 
   const handleDeleteRole = async (role: Role) => {
-    if (role.isSystemRole) {
-      alert('No se pueden eliminar roles del sistema');
-      return;
-    }
+    const warningMessage = role.isSystemRole
+      ? `ADVERTENCIA: "${role.name}" es un rol del SISTEMA. ¿Estas SEGURO de eliminarlo?`
+      : `¿Eliminar el rol "${role.name}"? Esta accion no se puede deshacer.`;
 
-    if (!window.confirm(`¿Eliminar el rol "${role.name}"? Esta accion no se puede deshacer.`)) {
+    if (!window.confirm(warningMessage)) {
       return;
     }
 
     try {
-      await api.delete(`/roles/${role._id}`);
+      // Super Admin puede eliminar roles del sistema con force=true
+      const endpoint = role.isSystemRole
+        ? `/roles/${role._id}?force=true`
+        : `/roles/${role._id}`;
+      await api.delete(endpoint);
       await fetchRoles();
       alert('Rol eliminado exitosamente');
     } catch (error: any) {
@@ -437,80 +444,97 @@ const RoleManagement: React.FC = () => {
         </div>
       </div>
 
-      <div className="roles-grid">
-        {filteredRoles.map((role) => (
-          <div key={role._id} className={`role-card ${role.isSystemRole ? 'system-role' : 'custom-role'}`}>
-            <div className="role-header" style={{ borderLeftColor: role.color }}>
-              <div className="role-icon" style={{ backgroundColor: role.color }}>
-                {role.icon || role.name.charAt(0).toUpperCase()}
-              </div>
-              <div className="role-info">
-                <h3>{role.name}</h3>
-                <span className="role-code">{role.code}</span>
-              </div>
-              {role.isSystemRole && (
-                <span className="system-badge">Sistema</span>
-              )}
-            </div>
-
-            <div className="role-body">
-              <p className="role-description">{role.description || 'Sin descripcion'}</p>
-
-              <div className="role-meta">
-                <div className="meta-item">
-                  <span className="meta-label">Nivel:</span>
-                  <span className="meta-value">{role.hierarchyLevel}</span>
-                </div>
-                <div className="meta-item">
-                  <span className="meta-label">Modulos:</span>
-                  <span className="meta-value">{role.accessibleModules?.length || 0}</span>
-                </div>
-              </div>
-
-              <div className="role-modules">
-                {role.accessibleModules?.slice(0, 4).map(mod => (
-                  <span key={mod} className="module-tag">{mod}</span>
-                ))}
-                {role.accessibleModules?.length > 4 && (
-                  <span className="module-tag more">+{role.accessibleModules.length - 4}</span>
-                )}
-              </div>
-            </div>
-
-            <div className="role-actions">
-              <button
-                className="btn-icon"
-                onClick={() => openPermissionsModal(role)}
-                title="Ver permisos"
-              >
-                <span role="img" aria-label="permisos">🔐</span>
-              </button>
-              <button
-                className="btn-icon"
-                onClick={() => openEditModal(role)}
-                title="Editar rol"
-              >
-                <span role="img" aria-label="editar">✏️</span>
-              </button>
-              <button
-                className="btn-icon"
-                onClick={() => handleDuplicateRole(role)}
-                title="Duplicar rol"
-              >
-                <span role="img" aria-label="duplicar">📋</span>
-              </button>
-              {!role.isSystemRole && (
-                <button
-                  className="btn-icon btn-danger"
-                  onClick={() => handleDeleteRole(role)}
-                  title="Eliminar rol"
-                >
-                  <span role="img" aria-label="eliminar">🗑️</span>
-                </button>
-              )}
-            </div>
+      <div className="roles-table-container">
+        <table className="roles-table">
+          <thead>
+            <tr>
+              <th>Rol</th>
+              <th>Codigo</th>
+              <th>Descripcion</th>
+              <th>Nivel</th>
+              <th>Modulos</th>
+              <th>Tipo</th>
+              <th>Acciones</th>
+            </tr>
+          </thead>
+          <tbody>
+            {filteredRoles.map((role) => (
+              <tr key={role._id} className={role.isSystemRole ? 'system-role-row' : 'custom-role-row'}>
+                <td className="role-name-cell">
+                  <div className="role-name-wrapper">
+                    <div className="role-icon-small" style={{ backgroundColor: role.color }}>
+                      {role.icon || role.name.charAt(0).toUpperCase()}
+                    </div>
+                    <span className="role-name-text">{role.name}</span>
+                  </div>
+                </td>
+                <td>
+                  <span className="role-code">{role.code}</span>
+                </td>
+                <td className="role-description-cell">
+                  <span className="role-description-text">{role.description || 'Sin descripcion'}</span>
+                </td>
+                <td className="role-level-cell">
+                  <span className="level-badge">{role.hierarchyLevel}</span>
+                </td>
+                <td className="role-modules-cell">
+                  <div className="modules-inline">
+                    {role.accessibleModules?.slice(0, 3).map(mod => (
+                      <span key={mod} className="module-tag-small">{mod}</span>
+                    ))}
+                    {role.accessibleModules?.length > 3 && (
+                      <span className="module-tag-small more">+{role.accessibleModules.length - 3}</span>
+                    )}
+                  </div>
+                </td>
+                <td>
+                  {role.isSystemRole ? (
+                    <span className="system-badge">Sistema</span>
+                  ) : (
+                    <span className="custom-badge">Personalizado</span>
+                  )}
+                </td>
+                <td className="role-actions-cell">
+                  <div className="actions-inline">
+                    <button
+                      className="btn-icon-small"
+                      onClick={() => openPermissionsModal(role)}
+                      title="Ver permisos"
+                    >
+                      🔐
+                    </button>
+                    <button
+                      className="btn-icon-small"
+                      onClick={() => openEditModal(role)}
+                      title="Editar rol"
+                    >
+                      ✏️
+                    </button>
+                    <button
+                      className="btn-icon-small"
+                      onClick={() => handleDuplicateRole(role)}
+                      title="Duplicar rol"
+                    >
+                      📋
+                    </button>
+                    <button
+                      className="btn-icon-small btn-danger"
+                      onClick={() => handleDeleteRole(role)}
+                      title={role.isSystemRole ? "Eliminar rol del sistema (Super Admin)" : "Eliminar rol"}
+                    >
+                      🗑️
+                    </button>
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        {filteredRoles.length === 0 && (
+          <div className="no-roles-message">
+            No se encontraron roles con los filtros aplicados
           </div>
-        ))}
+        )}
       </div>
 
       {/* Modal Crear Rol */}
@@ -647,8 +671,8 @@ const RoleManagement: React.FC = () => {
             </div>
             <div className="modal-body">
               {selectedRole.isSystemRole && (
-                <div className="alert alert-warning">
-                  Este es un rol del sistema. Solo se pueden modificar la descripcion, color e icono.
+                <div className="alert alert-info">
+                  Este es un rol del sistema. Como Super Admin, puedes modificar todos los campos.
                 </div>
               )}
 
@@ -659,7 +683,6 @@ const RoleManagement: React.FC = () => {
                     type="text"
                     value={formData.name}
                     onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                    disabled={selectedRole.isSystemRole}
                   />
                 </div>
                 <div className="form-group">
@@ -687,10 +710,9 @@ const RoleManagement: React.FC = () => {
                   <input
                     type="number"
                     min="0"
-                    max="99"
+                    max="100"
                     value={formData.hierarchyLevel}
                     onChange={(e) => setFormData({ ...formData, hierarchyLevel: parseInt(e.target.value) || 0 })}
-                    disabled={selectedRole.isSystemRole}
                   />
                 </div>
                 <div className="form-group">
@@ -712,48 +734,44 @@ const RoleManagement: React.FC = () => {
                 </div>
               </div>
 
-              {!selectedRole.isSystemRole && (
-                <>
-                  <div className="form-section">
-                    <h4>Modulos Accesibles</h4>
-                    <div className="modules-grid">
-                      {availableModules.map(mod => (
-                        <label key={mod.id} className="module-checkbox">
-                          <input
-                            type="checkbox"
-                            checked={formData.accessibleModules.includes(mod.id)}
-                            onChange={() => handleModuleToggle(mod.id)}
-                          />
-                          <span>{mod.label}</span>
-                        </label>
-                      ))}
-                    </div>
-                  </div>
+              <div className="form-section">
+                <h4>Modulos Accesibles</h4>
+                <div className="modules-grid">
+                  {availableModules.map(mod => (
+                    <label key={mod.id} className="module-checkbox">
+                      <input
+                        type="checkbox"
+                        checked={formData.accessibleModules.includes(mod.id)}
+                        onChange={() => handleModuleToggle(mod.id)}
+                      />
+                      <span>{mod.label}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
 
-                  <div className="form-section">
-                    <h4>Permisos por Modulo</h4>
-                    <div className="permissions-accordion">
-                      {Object.entries(permissionLabels).map(([module, perms]) => (
-                        <details key={module} className="permission-group">
-                          <summary>{moduleLabels[module] || module}</summary>
-                          <div className="permission-checkboxes">
-                            {Object.entries(perms).map(([permKey, permLabel]) => (
-                              <label key={permKey} className="permission-checkbox">
-                                <input
-                                  type="checkbox"
-                                  checked={getPermissionValue(module, permKey)}
-                                  onChange={(e) => handlePermissionChange(module, permKey, e.target.checked)}
-                                />
-                                <span>{permLabel}</span>
-                              </label>
-                            ))}
-                          </div>
-                        </details>
-                      ))}
-                    </div>
-                  </div>
-                </>
-              )}
+              <div className="form-section">
+                <h4>Permisos por Modulo</h4>
+                <div className="permissions-accordion">
+                  {Object.entries(permissionLabels).map(([module, perms]) => (
+                    <details key={module} className="permission-group">
+                      <summary>{moduleLabels[module] || module}</summary>
+                      <div className="permission-checkboxes">
+                        {Object.entries(perms).map(([permKey, permLabel]) => (
+                          <label key={permKey} className="permission-checkbox">
+                            <input
+                              type="checkbox"
+                              checked={getPermissionValue(module, permKey)}
+                              onChange={(e) => handlePermissionChange(module, permKey, e.target.checked)}
+                            />
+                            <span>{permLabel}</span>
+                          </label>
+                        ))}
+                      </div>
+                    </details>
+                  ))}
+                </div>
+              </div>
             </div>
             <div className="modal-footer">
               <button className="btn-secondary" onClick={() => setShowEditModal(false)}>
@@ -823,11 +841,9 @@ const RoleManagement: React.FC = () => {
               <button className="btn-secondary" onClick={() => setShowPermissionsModal(false)}>
                 Cerrar
               </button>
-              {!selectedRole.isSystemRole && (
-                <button className="btn-primary" onClick={() => { setShowPermissionsModal(false); openEditModal(selectedRole); }}>
-                  Editar Permisos
-                </button>
-              )}
+              <button className="btn-primary" onClick={() => { setShowPermissionsModal(false); openEditModal(selectedRole); }}>
+                Editar Permisos
+              </button>
             </div>
           </div>
         </div>

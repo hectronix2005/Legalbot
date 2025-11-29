@@ -203,25 +203,34 @@ router.put('/:id',
         return res.status(404).json({ error: 'Rol no encontrado' });
       }
 
-      // No permitir editar roles del sistema (excepto descripción y color/icon)
+      // Para roles del sistema: Super Admin puede editar todo con force=true
+      // Otros usuarios solo pueden editar descripción, color e icono
       if (role.isSystemRole) {
-        const { description, color, icon } = req.body;
+        const { force } = req.query;
+        const isSuperAdmin = req.user.role === 'super_admin';
 
-        // Solo actualizar campos permitidos para roles del sistema
-        if (description !== undefined) role.description = description;
-        if (color !== undefined) role.color = color;
-        if (icon !== undefined) role.icon = icon;
+        // Si es Super Admin con force=true, permitir edición completa
+        if (isSuperAdmin && force === 'true') {
+          // Continuar con la edición normal (saltar este bloque)
+        } else {
+          // Comportamiento restringido: solo campos permitidos
+          const { description, color, icon } = req.body;
 
-        await role.save();
+          if (description !== undefined) role.description = description;
+          if (color !== undefined) role.color = color;
+          if (icon !== undefined) role.icon = icon;
 
-        const populatedRole = await Role.findById(role._id)
-          .populate('companyId', 'name')
-          .populate('createdBy', 'name email');
+          await role.save();
 
-        return res.json({
-          message: 'Rol del sistema actualizado (solo campos permitidos)',
-          role: populatedRole
-        });
+          const populatedRole = await Role.findById(role._id)
+            .populate('companyId', 'name')
+            .populate('createdBy', 'name email');
+
+          return res.json({
+            message: 'Rol del sistema actualizado (solo campos permitidos)',
+            role: populatedRole
+          });
+        }
       }
 
       // Actualizar rol personalizado
@@ -272,9 +281,15 @@ router.delete('/:id', authenticate, requireSuperAdmin, async (req, res) => {
       return res.status(404).json({ error: 'Rol no encontrado' });
     }
 
-    // No permitir eliminar roles del sistema
+    // Para roles del sistema: Super Admin puede eliminar con force=true
     if (role.isSystemRole) {
-      return res.status(400).json({ error: 'No se pueden eliminar roles del sistema' });
+      const { force } = req.query;
+      const isSuperAdmin = req.user.role === 'super_admin';
+
+      if (!(isSuperAdmin && force === 'true')) {
+        return res.status(400).json({ error: 'No se pueden eliminar roles del sistema. Use force=true si es Super Admin.' });
+      }
+      // Si es Super Admin con force=true, continuar con la eliminación
     }
 
     // Verificar si hay usuarios con este rol

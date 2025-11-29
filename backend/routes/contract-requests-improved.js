@@ -16,9 +16,12 @@ router.get('/',
     try {
       const { status, priority } = req.query;
 
-      const filter = {
-        company: req.companyId
-      };
+      const filter = {};
+
+      // Super admin con ALL ve todas las empresas
+      if (req.companyId !== 'ALL') {
+        filter.company = req.companyId;
+      }
 
       // Filtrar según el rol
       if (req.companyRole === 'requester') {

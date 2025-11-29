@@ -39,6 +39,13 @@ router.post('/balance/initialize',
       const companyId = req.companyId;
       const performedBy = req.user.id;
 
+      // Super admin con ALL no puede inicializar balance - debe seleccionar empresa específica
+      if (companyId === 'ALL') {
+        return res.status(400).json({
+          error: 'Debe seleccionar una empresa específica para inicializar balance de vacaciones. Cambie la empresa activa en el selector de empresas.'
+        });
+      }
+
       if (!employeeId || !hireDate) {
         return res.status(400).json({
           error: 'Se requieren employeeId y hireDate'
@@ -98,6 +105,273 @@ router.put('/balance/:employeeId',
 );
 
 /**
+ * GET /api/vacations-v2/employee-hire-date/:employeeId
+ * Obtiene la fecha de contratación desde el contrato de trabajo del empleado
+ */
+router.get('/employee-hire-date/:employeeId', async (req, res) => {
+  try {
+    const { employeeId } = req.params;
+    const companyId = req.companyId;
+
+    // Importar modelos necesarios
+    const Contract = require('../models/Contract');
+    const ContractRequest = require('../models/ContractRequest');
+    const ContractTemplate = require('../models/ContractTemplate');
+
+    // Buscar contratos de trabajo del empleado
+    // Primero buscar plantillas de tipo "trabajo" o "laboral"
+    const laborTemplates = await ContractTemplate.find({
+      $or: [
+        { name: { $regex: /trabajo|laboral|empleado|contratación/i } },
+        { category: { $regex: /trabajo|laboral|empleo/i } }
+      ]
+    }).select('_id');
+
+    const templateIds = laborTemplates.map(t => t._id);
+
+    // Buscar contrato del empleado
+    let hireDate = null;
+    let contractInfo = null;
+
+    // Buscar en ContractRequest (donde está field_data)
+    const contractRequest = await ContractRequest.findOne({
+      $or: [
+        { requester: employeeId },
+        { 'questionnaire_answers.empleado_id': employeeId },
+        { 'field_data.empleado_id': employeeId }
+      ],
+      template: { $in: templateIds },
+      status: { $in: ['approved', 'completed'] }
+    }).sort({ createdAt: -1 });
+
+    if (contractRequest && contractRequest.field_data) {
+      // Buscar fecha en field_data con diferentes posibles nombres
+      const fieldData = contractRequest.field_data instanceof Map
+        ? Object.fromEntries(contractRequest.field_data)
+        : contractRequest.field_data;
+
+      const dateFields = ['fecha_inicio', 'fecha_contrato', 'fecha_contratacion', 'fecha_ingreso', 'start_date', 'hire_date'];
+      for (const field of dateFields) {
+        if (fieldData[field]) {
+          hireDate = fieldData[field];
+          break;
+        }
+      }
+      contractInfo = {
+        contract_id: contractRequest._id,
+        title: contractRequest.title,
+        source: 'contract_request'
+      };
+    }
+
+    // Si no encontramos en request, buscar en contratos directos
+    if (!hireDate) {
+      const contract = await Contract.findOne({
+        $or: [
+          { generated_by: employeeId },
+          { supplier_name: { $regex: new RegExp(employeeId, 'i') } }
+        ],
+        template: { $in: templateIds }
+      }).sort({ createdAt: -1 });
+
+      if (contract) {
+        // Usar la fecha de creación del contrato como aproximación
+        hireDate = contract.createdAt;
+        contractInfo = {
+          contract_id: contract._id,
+          contract_number: contract.contract_number,
+          title: contract.title,
+          source: 'contract'
+        };
+      }
+    }
+
+    // Formatear fecha si existe
+    let formattedDate = null;
+    if (hireDate) {
+      const date = new Date(hireDate);
+      if (!isNaN(date.getTime())) {
+        formattedDate = date.toISOString().split('T')[0]; // YYYY-MM-DD
+      }
+    }
+
+    res.json({
+      success: true,
+      data: {
+        employeeId,
+        hireDate: formattedDate,
+        contractInfo,
+        found: !!formattedDate
+      }
+    });
+  } catch (error) {
+    console.error('Error getting employee hire date:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * GET /api/vacations-v2/employee-data/:employeeId
+ * Obtiene datos del empleado desde el tercero tipo "empleado" (Supplier)
+ * Incluye: fecha_contratacion, cargo, departamento, lider
+ */
+router.get('/employee-data/:employeeId', async (req, res) => {
+  try {
+    const { employeeId } = req.params;
+    const companyId = req.companyId;
+
+    // Importar modelos
+    const Supplier = require('../models/Supplier');
+    const ThirdPartyTypeConfig = require('../models/ThirdPartyTypeConfig');
+    const User = require('../models/User');
+    const mongoose = require('mongoose');
+
+    // Buscar el tipo de tercero "empleado"
+    const empleadoType = await ThirdPartyTypeConfig.findOne({
+      code: 'empleado',
+      active: true
+    });
+
+    if (!empleadoType) {
+      return res.json({
+        success: true,
+        data: { found: false, message: 'Tipo de tercero "empleado" no configurado' }
+      });
+    }
+
+    let supplier = null;
+    let user = null; // Inicializar user fuera del scope
+
+    // NUEVO: Primero intentar buscar directamente por ID de Supplier (tercero)
+    if (mongoose.Types.ObjectId.isValid(employeeId)) {
+      supplier = await Supplier.findOne({
+        _id: employeeId,
+        third_party_type: empleadoType._id,
+        active: true,
+        deleted: { $ne: true }
+      }).populate('third_party_type');
+    }
+
+    // Si no se encontró como Supplier, intentar búsqueda por User (comportamiento anterior)
+    if (!supplier) {
+      user = await User.findById(employeeId).select('name email');
+      if (user) {
+        // Buscar tercero tipo empleado vinculado a este usuario
+        supplier = await Supplier.findOne({
+          $or: [
+            { email: user.email },
+            { 'custom_fields.user_id': employeeId },
+            { 'custom_fields.usuario_id': employeeId },
+            { legal_name: user.name },
+            { full_name: user.name }
+          ],
+          third_party_type: empleadoType._id,
+          active: true,
+          deleted: { $ne: true }
+        }).populate('third_party_type');
+      }
+    }
+
+    if (!supplier) {
+      return res.json({
+        success: true,
+        data: {
+          found: false,
+          message: 'No se encontró tercero tipo empleado'
+        }
+      });
+    }
+
+    // Extraer datos del tercero
+    const customFields = supplier.custom_fields instanceof Map
+      ? Object.fromEntries(supplier.custom_fields)
+      : (supplier.custom_fields || {});
+
+    // Buscar fecha de contratación en custom_fields
+    const hireDateFields = ['fecha_contratacion', 'fecha_de_iniciacion_de_labores', 'fecha_ingreso', 'fecha_inicio', 'hire_date', 'start_date'];
+    let hireDate = null;
+    for (const field of hireDateFields) {
+      if (customFields[field]) {
+        hireDate = customFields[field];
+        break;
+      }
+    }
+
+    // Formatear fecha
+    let formattedHireDate = null;
+    if (hireDate) {
+      const date = new Date(hireDate);
+      if (!isNaN(date.getTime())) {
+        formattedHireDate = date.toISOString().split('T')[0];
+      }
+    }
+
+    // Buscar cargo en custom_fields
+    const positionFields = ['cargo', 'position', 'puesto', 'rol'];
+    let position = null;
+    for (const field of positionFields) {
+      if (customFields[field]) {
+        position = customFields[field];
+        break;
+      }
+    }
+
+    // Buscar departamento en custom_fields
+    const departmentFields = ['departamento', 'department', 'area', 'seccion'];
+    let department = null;
+    for (const field of departmentFields) {
+      if (customFields[field]) {
+        department = customFields[field];
+        break;
+      }
+    }
+
+    // Buscar líder en custom_fields (puede ser ID o nombre)
+    const leaderFields = ['lider', 'leader', 'jefe', 'supervisor', 'lider_id', 'jefe_id'];
+    let leaderId = null;
+    let leaderName = null;
+    for (const field of leaderFields) {
+      if (customFields[field]) {
+        const value = customFields[field];
+        // Verificar si es un ObjectId válido
+        if (value && value.match && value.match(/^[0-9a-fA-F]{24}$/)) {
+          leaderId = value;
+          // Intentar obtener nombre del líder
+          const leader = await User.findById(leaderId).select('name');
+          if (leader) leaderName = leader.name;
+        } else {
+          leaderName = value;
+        }
+        break;
+      }
+    }
+
+    res.json({
+      success: true,
+      data: {
+        found: true,
+        employeeId,
+        supplierId: supplier._id,
+        // Usar datos del Supplier si user es null
+        employeeName: supplier.legal_name || supplier.full_name,
+        employeeEmail: supplier.email,
+        user: user ? { name: user.name, email: user.email } : null,
+        hireDate: formattedHireDate,
+        position,
+        department,
+        leaderId,
+        leaderName,
+        customFields,
+        source: 'tercero_empleado'
+      }
+    });
+  } catch (error) {
+    console.error('Error getting employee data from supplier:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
  * GET /api/vacations-v2/balance/:employeeId
  * Obtiene el balance de vacaciones de un empleado
  */
@@ -142,6 +416,15 @@ router.get('/my-balance', async (req, res) => {
     const employeeId = req.user.id;
     const companyId = req.companyId;
 
+    // Super admin con ALL no tiene balance personal - mostrar mensaje
+    if (companyId === 'ALL') {
+      return res.json({
+        success: true,
+        data: null,
+        message: 'Selecciona una empresa específica para ver tu balance de vacaciones'
+      });
+    }
+
     const result = await vacationServiceV2.getEmployeeBalance(employeeId, companyId);
 
     if (!result) {
@@ -171,6 +454,16 @@ router.get('/employees',
     try {
       const { department, leaderId } = req.query;
       const companyId = req.companyId;
+
+      // Super admin con ALL - retornar lista vacía
+      if (companyId === 'ALL') {
+        return res.json({
+          success: true,
+          data: [],
+          total: 0,
+          message: 'Selecciona una empresa específica para ver empleados'
+        });
+      }
 
       const balances = await vacationServiceV2.getAllEmployeeBalances(companyId, { department, leaderId });
 
@@ -398,6 +691,15 @@ router.get('/requests/my', async (req, res) => {
     const companyId = req.companyId;
     const { status, limit = 50, skip = 0 } = req.query;
 
+    // Super admin con ALL - mostrar lista vacía con mensaje
+    if (companyId === 'ALL') {
+      return res.json({
+        success: true,
+        data: { requests: [], total: 0 },
+        message: 'Selecciona una empresa específica para ver tus solicitudes'
+      });
+    }
+
     const filters = { employeeId };
     if (status) filters.status = status;
 
@@ -470,6 +772,16 @@ router.get('/pending/leader', async (req, res) => {
   try {
     const leaderId = req.user.id;
     const companyId = req.companyId;
+
+    // Super admin con ALL - retornar lista vacía
+    if (companyId === 'ALL') {
+      return res.json({
+        success: true,
+        data: [],
+        total: 0,
+        message: 'Selecciona una empresa específica para ver solicitudes pendientes'
+      });
+    }
 
     const requests = await vacationServiceV2.getPendingForLeader(leaderId, companyId);
 
@@ -552,6 +864,16 @@ router.get('/pending/hr',
   async (req, res) => {
     try {
       const companyId = req.companyId;
+
+      // Super admin con ALL - retornar lista vacía
+      if (companyId === 'ALL') {
+        return res.json({
+          success: true,
+          data: [],
+          total: 0,
+          message: 'Selecciona una empresa específica para ver solicitudes pendientes'
+        });
+      }
 
       const requests = await vacationServiceV2.getPendingForHR(companyId);
 
@@ -737,6 +1059,77 @@ router.delete('/suspensions/:employeeId/:index',
       });
     } catch (error) {
       console.error('Error removing suspension:', error);
+      res.status(400).json({ error: error.message });
+    }
+  }
+);
+
+// ============================================================================
+// CAMBIO DE FECHA DE CONTRATACIÓN
+// ============================================================================
+
+/**
+ * PUT /api/vacations-v2/balance/:employeeId/hire-date
+ * Actualiza la fecha de contratación con recálculo de días causados
+ * Sincroniza con Supplier (tercero) y crea audit log
+ * Roles: admin, talento_humano
+ */
+router.put('/balance/:employeeId/hire-date',
+  authorizeCompanyRole('admin', 'talento_humano'),
+  async (req, res) => {
+    try {
+      const { employeeId } = req.params;
+      const { newHireDate, reason, syncToSupplier = true } = req.body;
+      const companyId = req.companyId;
+      const performedBy = req.user.id;
+
+      // Validaciones
+      if (!newHireDate) {
+        return res.status(400).json({
+          error: 'Se requiere newHireDate (nueva fecha de contratación)'
+        });
+      }
+
+      if (!reason || reason.trim().length < 10) {
+        return res.status(400).json({
+          error: 'Se requiere una razón detallada (mínimo 10 caracteres) para el cambio de fecha de contratación'
+        });
+      }
+
+      const parsedDate = new Date(newHireDate);
+      if (isNaN(parsedDate.getTime())) {
+        return res.status(400).json({
+          error: 'Formato de fecha inválido. Use YYYY-MM-DD'
+        });
+      }
+
+      // Fecha no puede ser en el futuro
+      if (parsedDate > new Date()) {
+        return res.status(400).json({
+          error: 'La fecha de contratación no puede ser en el futuro'
+        });
+      }
+
+      const result = await vacationServiceV2.updateHireDate(
+        employeeId,
+        newHireDate,
+        reason,
+        companyId,
+        performedBy,
+        { syncToSupplier }
+      );
+
+      res.json({
+        success: true,
+        message: 'Fecha de contratación actualizada exitosamente',
+        data: {
+          balance: result.balance,
+          change: result.change,
+          causacion: result.causacion
+        }
+      });
+    } catch (error) {
+      console.error('Error updating hire date:', error);
       res.status(400).json({ error: error.message });
     }
   }

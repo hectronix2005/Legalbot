@@ -51,7 +51,7 @@ router.get('/types', authenticate, async (req, res) => {
 // Obtener todos los proveedores de la empresa (o todos si es super_admin)
 router.get('/', authenticate, verifyTenant, async (req, res) => {
   try {
-    const { active, includeDeleted } = req.query;
+    const { active, includeDeleted, type } = req.query;
 
     const filter = {};
 
@@ -69,6 +69,18 @@ router.get('/', authenticate, verifyTenant, async (req, res) => {
     // PROTECCIÓN: Por defecto, NO mostrar eliminados
     if (includeDeleted !== 'true') {
       filter.deleted = { $ne: true };
+    }
+
+    // Filtrar por tipo de tercero (code del ThirdPartyTypeConfig)
+    if (type) {
+      const ThirdPartyTypeConfig = require('../models/ThirdPartyTypeConfig');
+      const typeConfig = await ThirdPartyTypeConfig.findOne({ code: type.toLowerCase() });
+      if (typeConfig) {
+        filter.third_party_type = typeConfig._id;
+      } else {
+        // Si el tipo no existe, retornar vacío
+        return res.json({ success: true, count: 0, suppliers: [] });
+      }
     }
 
     const suppliers = await Supplier.find(filter)

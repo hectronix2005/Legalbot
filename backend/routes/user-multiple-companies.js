@@ -20,7 +20,8 @@ router.get('/companies', authenticate, requireSuperAdmin, async (req, res) => {
 // Obtener todos los usuarios con sus empresas múltiples
 router.get('/users', authenticate, requireSuperAdmin, async (req, res) => {
   try {
-    const users = await User.find({})
+    // Solo traer usuarios activos (excluir los eliminados con soft delete)
+    const users = await User.find({ active: { $ne: false } })
       .select('email name role active createdAt');
     
     // Para cada usuario, obtener sus empresas

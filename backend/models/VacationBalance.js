@@ -145,6 +145,39 @@ const VacationBalanceSchema = new Schema({
       ref: 'User'
     }
   }],
+  // Historial de cambios de fecha de contratación
+  hireDateChangeHistory: [{
+    previousHireDate: {
+      type: Date,
+      required: true
+    },
+    newHireDate: {
+      type: Date,
+      required: true
+    },
+    changeDate: {
+      type: Date,
+      default: Date.now
+    },
+    accruedBeforeChange: {
+      type: Number
+    },
+    accruedAfterChange: {
+      type: Number
+    },
+    adjustmentDays: {
+      type: Number,
+      default: 0
+    },
+    reason: {
+      type: String,
+      required: true
+    },
+    performedBy: {
+      type: Schema.Types.ObjectId,
+      ref: 'User'
+    }
+  }],
   // Notas adicionales sobre el balance
   notes: {
     type: String,

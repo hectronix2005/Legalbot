@@ -15,7 +15,6 @@ router.get('/', authenticate, authorize('admin'), async (req, res) => {
     if (company_id) filter.company = company_id;
 
     const users = await User.find(filter)
-      .populate('company', 'name')
       .select('-password')
       .sort({ createdAt: -1 });
 
@@ -110,6 +109,43 @@ router.patch('/me/password',
     } catch (error) {
       console.error('Error al cambiar contraseña:', error);
       res.status(500).json({ error: 'Error al cambiar contraseña' });
+    }
+  }
+);
+
+// Reiniciar contraseña de un usuario (solo Admin/Super Admin)
+router.post('/:id/reset-password',
+  authenticate,
+  authorize('admin'),
+  async (req, res) => {
+    try {
+      const { newPassword } = req.body;
+
+      if (!newPassword) {
+        return res.status(400).json({ error: 'Se requiere la nueva contraseña' });
+      }
+
+      if (newPassword.length < 6) {
+        return res.status(400).json({ error: 'La nueva contraseña debe tener al menos 6 caracteres' });
+      }
+
+      const user = await User.findById(req.params.id);
+      if (!user) {
+        return res.status(404).json({ error: 'Usuario no encontrado' });
+      }
+
+      // Verificar jerarquía: solo super_admin puede resetear a otro super_admin
+      if (user.role === 'super_admin' && req.user.role !== 'super_admin') {
+        return res.status(403).json({ error: 'No tiene permisos para modificar este usuario' });
+      }
+
+      const hashedPassword = await bcrypt.hash(newPassword, 10);
+      await User.findByIdAndUpdate(req.params.id, { password: hashedPassword });
+
+      res.json({ message: 'Contraseña reiniciada exitosamente' });
+    } catch (error) {
+      console.error('Error al reiniciar contraseña:', error);
+      res.status(500).json({ error: 'Error al reiniciar contraseña' });
     }
   }
 );

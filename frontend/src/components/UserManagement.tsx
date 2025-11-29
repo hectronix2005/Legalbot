@@ -62,6 +62,7 @@ const UserManagement: React.FC = () => {
   const [showPermissionsModal, setShowPermissionsModal] = useState(false);
   const [showUserInfoModal, setShowUserInfoModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
+  const [showResetPasswordModal, setShowResetPasswordModal] = useState(false);
   const [selectedUserCompany, setSelectedUserCompany] = useState<UserCompany | null>(null);
   const [expandedUsers, setExpandedUsers] = useState<Set<string>>(new Set());
   const [editUser, setEditUser] = useState({
@@ -70,6 +71,8 @@ const UserManagement: React.FC = () => {
     email: '',
     role: 'requester'
   });
+  const [resetPasswordUser, setResetPasswordUser] = useState<User | null>(null);
+  const [newPassword, setNewPassword] = useState('');
 
   // Filtros y ordenamiento
   const [filterText, setFilterText] = useState('');
@@ -283,6 +286,33 @@ const UserManagement: React.FC = () => {
     }
   };
 
+  // Abrir modal de reset de contraseña
+  const openResetPasswordModal = (user: User) => {
+    setResetPasswordUser(user);
+    setNewPassword('');
+    setShowResetPasswordModal(true);
+  };
+
+  // Reiniciar contraseña de un usuario
+  const handleResetPassword = async () => {
+    if (!resetPasswordUser || !newPassword) return;
+
+    if (newPassword.length < 6) {
+      alert('La nueva contraseña debe tener al menos 6 caracteres');
+      return;
+    }
+
+    try {
+      await api.post(`/users/${resetPasswordUser._id}/reset-password`, { newPassword });
+      alert(`Contraseña reiniciada exitosamente para ${resetPasswordUser.name}`);
+      setShowResetPasswordModal(false);
+      setResetPasswordUser(null);
+      setNewPassword('');
+    } catch (error: any) {
+      alert(error.response?.data?.error || 'Error al reiniciar contraseña');
+    }
+  };
+
   // Función para normalizar texto (remover acentos/tildes)
   const normalizeText = (text: string): string => {
     return text
@@ -476,6 +506,13 @@ const UserManagement: React.FC = () => {
                   ✎
                 </button>
                 <button
+                  className="btn-reset-password"
+                  onClick={() => openResetPasswordModal(user)}
+                  title="Reiniciar contraseña"
+                >
+                  🔑
+                </button>
+                <button
                   className={`btn-toggle-status ${user.active ? 'deactivate' : 'activate'}`}
                   onClick={() => handleToggleUserStatus(user._id, user.name, user.active)}
                   title={user.active ? 'Desactivar usuario' : 'Activar usuario'}
@@ -539,98 +576,113 @@ const UserManagement: React.FC = () => {
 
       {/* Modal para asignar usuario a empresa */}
       {showAssignModal && selectedUser && (
-        <div className="modal-overlay">
-          <div className="modal modal-large">
-            <h3>Asignar Usuario a Empresa</h3>
-            <p><strong>Usuario:</strong> {selectedUser.name} ({selectedUser.email})</p>
-
-            <div className="form-group">
-              <label>Buscar Empresa:</label>
-              <input
-                type="text"
-                placeholder="Buscar por nombre o NIT/RUC..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="search-input"
-              />
+        <div className="modal-overlay" onClick={() => { setShowAssignModal(false); setSelectedUser(null); setSearchTerm(''); }}>
+          <div className="modal modal-assign modal-content" onClick={(e) => e.stopPropagation()}>
+            <button
+              className="modal-close-btn"
+              onClick={() => {
+                setShowAssignModal(false);
+                setSelectedUser(null);
+                setSearchTerm('');
+              }}
+              title="Cerrar"
+            >
+              &times;
+            </button>
+            <div className="modal-header-fixed">
+              <h3>Asignar Usuario a Empresa</h3>
+              <p><strong>Usuario:</strong> {selectedUser.name} ({selectedUser.email})</p>
             </div>
 
-            <div className="form-group">
-              <label>Seleccionar Empresa:</label>
-              <div className="company-list">
-                {filteredCompanies.length === 0 ? (
-                  <p className="no-results">No se encontraron empresas</p>
-                ) : (
-                  <select
-                    value={selectedCompany}
-                    onChange={(e) => setSelectedCompany(e.target.value)}
-                    size={Math.min(filteredCompanies.length, 8)}
-                  >
-                    <option value="">Seleccionar empresa...</option>
-                    {filteredCompanies.map((company) => (
-                      <option key={company._id} value={company._id}>
-                        {company.name} - {company.tax_id}
-                      </option>
-                    ))}
-                  </select>
-                )}
+            <div className="modal-body-scroll">
+              <div className="form-group compact">
+                <label>Buscar Empresa:</label>
+                <input
+                  type="text"
+                  placeholder="Buscar por nombre o NIT/RUC..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="search-input"
+                />
+              </div>
+
+              <div className="form-group compact">
+                <label>Seleccionar Empresa:</label>
+                <div className="company-list">
+                  {filteredCompanies.length === 0 ? (
+                    <p className="no-results">No se encontraron empresas</p>
+                  ) : (
+                    <select
+                      value={selectedCompany}
+                      onChange={(e) => setSelectedCompany(e.target.value)}
+                      size={Math.min(filteredCompanies.length, 4)}
+                    >
+                      <option value="">Seleccionar empresa...</option>
+                      {filteredCompanies.map((company) => (
+                        <option key={company._id} value={company._id}>
+                          {company.name} - {company.tax_id}
+                        </option>
+                      ))}
+                    </select>
+                  )}
+                </div>
+              </div>
+
+              <div className="form-group compact">
+                <label>Rol en la Empresa:</label>
+                <select
+                  value={selectedRole}
+                  onChange={(e) => setSelectedRole(e.target.value)}
+                >
+                  <option value="requester">Usuario</option>
+                  <option value="lawyer">Abogado</option>
+                  <option value="admin">Administrador</option>
+                  <option value="super_admin">Super Admin</option>
+                  <option value="talento_humano">Talento Humano</option>
+                  <option value="colaboradores">Colaboradores</option>
+                </select>
+              </div>
+
+              <div className="form-group compact">
+                <label>Permisos:</label>
+                <div className="permissions-grid-compact">
+                  <label>
+                    <input
+                      type="checkbox"
+                      checked={permissions.canView}
+                      onChange={(e) => setPermissions({...permissions, canView: e.target.checked})}
+                    />
+                    Ver
+                  </label>
+                  <label>
+                    <input
+                      type="checkbox"
+                      checked={permissions.canEdit}
+                      onChange={(e) => setPermissions({...permissions, canEdit: e.target.checked})}
+                    />
+                    Editar
+                  </label>
+                  <label>
+                    <input
+                      type="checkbox"
+                      checked={permissions.canDelete}
+                      onChange={(e) => setPermissions({...permissions, canDelete: e.target.checked})}
+                    />
+                    Eliminar
+                  </label>
+                  <label>
+                    <input
+                      type="checkbox"
+                      checked={permissions.canManageUsers}
+                      onChange={(e) => setPermissions({...permissions, canManageUsers: e.target.checked})}
+                    />
+                    Gestionar Usuarios
+                  </label>
+                </div>
               </div>
             </div>
 
-            <div className="form-group">
-              <label>Rol en la Empresa:</label>
-              <select
-                value={selectedRole}
-                onChange={(e) => setSelectedRole(e.target.value)}
-              >
-                <option value="requester">Usuario</option>
-                <option value="lawyer">Abogado</option>
-                <option value="admin">Administrador</option>
-                <option value="super_admin">Super Admin</option>
-                <option value="talento_humano">Talento Humano</option>
-                <option value="colaboradores">Colaboradores</option>
-              </select>
-            </div>
-
-            <div className="form-group">
-              <label>Permisos:</label>
-              <div className="permissions-grid">
-                <label>
-                  <input
-                    type="checkbox"
-                    checked={permissions.canView}
-                    onChange={(e) => setPermissions({...permissions, canView: e.target.checked})}
-                  />
-                  Ver
-                </label>
-                <label>
-                  <input
-                    type="checkbox"
-                    checked={permissions.canEdit}
-                    onChange={(e) => setPermissions({...permissions, canEdit: e.target.checked})}
-                  />
-                  Editar
-                </label>
-                <label>
-                  <input
-                    type="checkbox"
-                    checked={permissions.canDelete}
-                    onChange={(e) => setPermissions({...permissions, canDelete: e.target.checked})}
-                  />
-                  Eliminar
-                </label>
-                <label>
-                  <input
-                    type="checkbox"
-                    checked={permissions.canManageUsers}
-                    onChange={(e) => setPermissions({...permissions, canManageUsers: e.target.checked})}
-                  />
-                  Gestionar Usuarios
-                </label>
-              </div>
-            </div>
-
-            <div className="modal-actions">
+            <div className="modal-actions-fixed">
               <button
                 className="btn-secondary"
                 onClick={() => {
@@ -950,6 +1002,59 @@ const UserManagement: React.FC = () => {
                 onClick={handleEditUser}
               >
                 Guardar Cambios
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal para reiniciar contraseña */}
+      {showResetPasswordModal && resetPasswordUser && (
+        <div className="modal-overlay" onClick={() => setShowResetPasswordModal(false)}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+            <button
+              className="modal-close-btn"
+              onClick={() => {
+                setShowResetPasswordModal(false);
+                setResetPasswordUser(null);
+                setNewPassword('');
+              }}
+              title="Cerrar"
+            >
+              &times;
+            </button>
+            <h2>Reiniciar Contraseña</h2>
+            <div className="modal-body">
+              <p><strong>Usuario:</strong> {resetPasswordUser.name} ({resetPasswordUser.email})</p>
+
+              <div className="form-group">
+                <label>Nueva Contraseña:</label>
+                <input
+                  type="password"
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  placeholder="Minimo 6 caracteres"
+                />
+              </div>
+            </div>
+
+            <div className="modal-actions">
+              <button
+                className="btn-secondary"
+                onClick={() => {
+                  setShowResetPasswordModal(false);
+                  setResetPasswordUser(null);
+                  setNewPassword('');
+                }}
+              >
+                Cancelar
+              </button>
+              <button
+                className="btn-primary"
+                onClick={handleResetPassword}
+                disabled={!newPassword || newPassword.length < 6}
+              >
+                Reiniciar Contraseña
               </button>
             </div>
           </div>

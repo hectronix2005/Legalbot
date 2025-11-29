@@ -46,6 +46,10 @@ interface Supplier {
     name: string;
     email: string;
   };
+  company?: {
+    _id: string;
+    name: string;
+  };
   canDelete?: boolean; // Indica si se puede eliminar (basado en referencias)
   hasReferences?: boolean; // Indica si tiene referencias en contratos/plantillas
   referenceDetails?: {
@@ -139,6 +143,13 @@ const countriesWithCities: { [key: string]: string[] } = {
   ]
 };
 
+interface SystemUser {
+  _id: string;
+  name: string;
+  email: string;
+  role?: string;
+}
+
 const Suppliers: React.FC = () => {
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [filteredSuppliers, setFilteredSuppliers] = useState<Supplier[]>([]);
@@ -150,6 +161,7 @@ const Suppliers: React.FC = () => {
   const [showTemplateBasedForm, setShowTemplateBasedForm] = useState(false);
   const [editingSupplier, setEditingSupplier] = useState<Supplier | null>(null);
   const [thirdPartyTypes, setThirdPartyTypes] = useState<ThirdPartyType[]>([]);
+  const [systemUsers, setSystemUsers] = useState<SystemUser[]>([]);
   const [formData, setFormData] = useState<SupplierFormData>({
     identification_type: '',
     identification_number: '',
@@ -171,10 +183,24 @@ const Suppliers: React.FC = () => {
   });
 
   useEffect(() => {
-    console.log('🔵 Suppliers component loaded - VERSION 2025-11-11-00:25 with supplier extraction fix');
+    console.log('🔵 Suppliers component loaded - VERSION 2025-11-28-01:00 with custom fields for employees');
     fetchSuppliers();
     fetchThirdPartyTypes();
+    fetchSystemUsers();
   }, []);
+
+  // Fetch system users for the "lider" field (user_select type)
+  const fetchSystemUsers = async () => {
+    try {
+      const response = await api.get('/users');
+      const users = response.data || [];
+      console.log('👥 System users loaded:', users.length);
+      setSystemUsers(users);
+    } catch (error) {
+      console.error('Error fetching system users:', error);
+      setSystemUsers([]);
+    }
+  };
 
   // Filtrar terceros por tipo, razón social, número ID o email
   useEffect(() => {
@@ -646,6 +672,7 @@ const Suppliers: React.FC = () => {
                   <th>Tipo</th>
                   <th>Información del Tercero</th>
                   <th>Identificación</th>
+                  <th>Empresa</th>
                   <th>Contacto</th>
                   <th>Acciones</th>
                 </tr>
@@ -691,6 +718,15 @@ const Suppliers: React.FC = () => {
                         <span className="id-type">{supplier.identification_type}</span>
                         <span className="id-number">{supplier.identification_number}</span>
                       </div>
+                    </td>
+                    <td className="company-col">
+                      {supplier.company ? (
+                        <span className="company-badge" title={supplier.company.name}>
+                          {supplier.company.name}
+                        </span>
+                      ) : (
+                        <span className="no-company">-</span>
+                      )}
                     </td>
                     <td className="contact-col">
                       <div className="contact-info">
@@ -1448,6 +1484,172 @@ const Suppliers: React.FC = () => {
                   </div>
                 </div>
               </div>
+
+              {/* Campos Personalizados del Tipo de Tercero */}
+              {formData.third_party_type && (() => {
+                const selectedType = thirdPartyTypes.find(t => t._id === formData.third_party_type);
+                const customFields = selectedType?.fields || [];
+
+                if (customFields.length === 0) return null;
+
+                return (
+                  <div className="form-section">
+                    <h4>Campos de {selectedType?.label || 'Tercero'}</h4>
+
+                    <div className="form-row" style={{ flexWrap: 'wrap', gap: '1rem' }}>
+                      {customFields.map((field: any) => (
+                        <div
+                          className="form-group"
+                          key={field.name}
+                          style={{ flex: field.field_type === 'textarea' ? '1 1 100%' : '1 1 45%', minWidth: '200px' }}
+                        >
+                          <label>
+                            {field.label}:
+                            {field.required && <span style={{ color: 'red' }}> *</span>}
+                          </label>
+
+                          {/* Campo tipo date */}
+                          {field.field_type === 'date' && (
+                            <input
+                              type="date"
+                              value={formData.custom_fields?.[field.name] || ''}
+                              onChange={(e) => {
+                                const dateValue = e.target.value;
+                                setFormData({
+                                  ...formData,
+                                  custom_fields: {
+                                    ...formData.custom_fields,
+                                    [field.name]: dateValue
+                                  }
+                                });
+                              }}
+                              placeholder={field.placeholder || 'mm/dd/yyyy'}
+                              required={field.required}
+                              style={{ padding: '0.5rem', fontSize: '1rem', width: '100%', border: '1px solid #ccc', borderRadius: '4px' }}
+                            />
+                          )}
+
+                          {/* Campo tipo user_select */}
+                          {field.field_type === 'user_select' && (
+                            <select
+                              value={formData.custom_fields?.[field.name] || ''}
+                              onChange={(e) => {
+                                setFormData({
+                                  ...formData,
+                                  custom_fields: {
+                                    ...formData.custom_fields,
+                                    [field.name]: e.target.value
+                                  }
+                                });
+                              }}
+                              required={field.required}
+                              style={{ padding: '0.5rem', fontSize: '1rem', width: '100%', border: '1px solid #ccc', borderRadius: '4px' }}
+                            >
+                              <option value="">Seleccione un usuario</option>
+                              {systemUsers.map((user) => (
+                                <option key={user._id} value={user._id}>
+                                  {user.name} ({user.email})
+                                </option>
+                              ))}
+                            </select>
+                          )}
+
+                          {/* Campo tipo select */}
+                          {field.field_type === 'select' && (
+                            <select
+                              value={formData.custom_fields?.[field.name] || ''}
+                              onChange={(e) => {
+                                setFormData({
+                                  ...formData,
+                                  custom_fields: {
+                                    ...formData.custom_fields,
+                                    [field.name]: e.target.value
+                                  }
+                                });
+                              }}
+                              required={field.required}
+                              style={{ padding: '0.5rem', fontSize: '1rem', width: '100%', border: '1px solid #ccc', borderRadius: '4px' }}
+                            >
+                              <option value="">Seleccione una opción</option>
+                              {(field.options || []).map((option: string) => (
+                                <option key={option} value={option}>{option}</option>
+                              ))}
+                            </select>
+                          )}
+
+                          {/* Campo tipo textarea */}
+                          {field.field_type === 'textarea' && (
+                            <textarea
+                              value={formData.custom_fields?.[field.name] || ''}
+                              onChange={(e) => {
+                                setFormData({
+                                  ...formData,
+                                  custom_fields: {
+                                    ...formData.custom_fields,
+                                    [field.name]: e.target.value
+                                  }
+                                });
+                              }}
+                              placeholder={field.placeholder || ''}
+                              required={field.required}
+                              rows={3}
+                              style={{ padding: '0.5rem', fontSize: '1rem', width: '100%', border: '1px solid #ccc', borderRadius: '4px', resize: 'vertical' }}
+                            />
+                          )}
+
+                          {/* Campo tipo checkbox */}
+                          {field.field_type === 'checkbox' && (
+                            <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer' }}>
+                              <input
+                                type="checkbox"
+                                checked={formData.custom_fields?.[field.name] === true || formData.custom_fields?.[field.name] === 'true'}
+                                onChange={(e) => {
+                                  setFormData({
+                                    ...formData,
+                                    custom_fields: {
+                                      ...formData.custom_fields,
+                                      [field.name]: e.target.checked
+                                    }
+                                  });
+                                }}
+                                style={{ width: '18px', height: '18px' }}
+                              />
+                              <span style={{ color: '#555' }}>{field.placeholder || 'Sí'}</span>
+                            </label>
+                          )}
+
+                          {/* Campos de texto y otros tipos */}
+                          {['text', 'number', 'email', 'phone'].includes(field.field_type) && (
+                            <input
+                              type={field.field_type === 'phone' ? 'tel' : field.field_type}
+                              value={formData.custom_fields?.[field.name] || ''}
+                              onChange={(e) => {
+                                setFormData({
+                                  ...formData,
+                                  custom_fields: {
+                                    ...formData.custom_fields,
+                                    [field.name]: e.target.value
+                                  }
+                                });
+                              }}
+                              placeholder={field.placeholder || ''}
+                              required={field.required}
+                              style={{ padding: '0.5rem', fontSize: '1rem', width: '100%', border: '1px solid #ccc', borderRadius: '4px' }}
+                            />
+                          )}
+
+                          {/* Mostrar valor actual si existe en custom_fields */}
+                          {field.field_type === 'user_select' && formData.custom_fields?.[field.name] && (
+                            <small style={{ display: 'block', marginTop: '0.25rem', color: '#666', fontSize: '0.85rem' }}>
+                              ID seleccionado: {formData.custom_fields[field.name]}
+                            </small>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })()}
 
               {/* Panel de Sugerencias de Campos */}
               {editingSupplier._id && (
